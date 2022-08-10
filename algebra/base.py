@@ -34,11 +34,6 @@ class MathsSet(metaclass = NumType):
         #use to create classes specific to each ring.
         #for example to create a unique Factorization class for each new type of ring
         pass
-
-    @classmethod
-    def test_values(cls):
-        warnings.warn(f"No test values provided for {cls}", RuntimeWarning)
-        return []
     
     @classmethod
     def test_axioms(cls, test):
@@ -60,6 +55,11 @@ class MathsSet(metaclass = NumType):
 
 
 class AbGroup(MathsSet):
+    @classmethod
+    def test_values(cls):
+        warnings.warn(f"No test values provided for {cls}", RuntimeWarning)
+        return []
+    
     @classmethod
     def test_axioms(cls, test):
         values = cls.test_values()
@@ -141,7 +141,7 @@ class NotDivisibleError(ZeroDivisionError):
 
 
 
-class Ring(AbGroup):
+class NComRing(AbGroup):
     @classmethod
     def test_axioms(cls, test):
         super().test_axioms(test)
@@ -160,14 +160,13 @@ class Ring(AbGroup):
                     test.assertEqual(a * (b + c), a * b + a * c)
                     test.assertEqual((a + b) * c, a * c + b * c)
 
+    @classmethod
+    def zero(cls):
+        return cls.int(0)
                 
     @classmethod
     def int(cls, n):
         raise NotImplementedError()
-
-    @classmethod
-    def zero(cls):
-        return cls.int(0)
 
     @classmethod
     def product(cls, vals):
@@ -190,7 +189,49 @@ class Ring(AbGroup):
     def mul(self, other):
         assert (cls := type(self)) == type(other)
         raise NotImplementedError()
-    #called by the syntax | or implemented in terms of // and % in an ED
+
+    def __mul__(self, other):
+        try:
+            other = type(self).convert(other)
+        except NotImplementedError:
+            return NotImplemented
+        else:
+            return self.mul(other)
+    def __rmul__(self, other):
+        try:
+            other = type(self).convert(other)
+        except NotImplementedError:
+            return NotImplemented
+        else:
+            return other.mul(self)
+
+    def __pow__(self, other):
+        cls = type(self)
+        if type(other) == int:
+            if other < 0:
+                return (self ** (-other)).recip()
+            elif other == 0:
+                return cls.int(1)
+            elif other == 1:
+                return self
+            elif other == 2:
+                return self * self
+            else:
+                q, r = divmod(other, 2)
+                return (self ** q) ** 2 * self ** r
+        return NotImplemented
+
+
+
+class Ring(NComRing):
+    @classmethod
+    def test_axioms(cls, test):
+        super().test_axioms(test)
+  
+##    @classmethod
+##    def convert(cls, x):
+##        return super().convert(x)
+
     def exactdiv(self, other):
         assert (cls := type(self)) == type(other)
         raise NotImplementedError()
@@ -207,21 +248,6 @@ class Ring(AbGroup):
             return True
         except NotDivisibleError:
             return False
-
-    def __mul__(self, other):
-        try:
-            other = type(self).convert(other)
-        except NotImplementedError:
-            return NotImplemented
-        else:
-            return self.mul(other)
-    def __rmul__(self, other):
-        try:
-            other = type(self).convert(other)
-        except NotImplementedError:
-            return NotImplemented
-        else:
-            return other.mul(self)
 
     #implement a/b as exact division
     #note that this is not compatible with builtin integer division, so builtin integers should
@@ -241,22 +267,6 @@ class Ring(AbGroup):
             return NotImplemented
         else:
             return other.exactdiv(self)
-
-    def __pow__(self, other):
-        cls = type(self)
-        if type(other) == int:
-            if other < 0:
-                return (self ** (-other)).recip()
-            elif other == 0:
-                return cls.int(1)
-            elif other == 1:
-                return self
-            elif other == 2:
-                return self * self
-            else:
-                q, r = divmod(other, 2)
-                return (self ** q) ** 2 * self ** r
-        return NotImplemented
 
 
 class IntegralDomain(Ring):
@@ -764,7 +774,7 @@ class ZZ(EuclideanDomain):
 
 
 
-class Gaussian(EuclideanDomain):
+class Gaussian(EuclideanDomain):    
     @classmethod
     def typestr(cls):
         return "ℤi"
@@ -788,7 +798,16 @@ class Gaussian(EuclideanDomain):
         self.b = b
 
     def __str__(self):
-        return f"{self.a} + {self.b}i"
+        if self == 0:
+            return "0"
+        elif self.a == 0:
+            return f"{self.b}i"
+        elif self.b == 0:
+            return str(self.a)
+        elif self.b < 0:
+            return f"{self.a}{self.b}i"
+        else:
+            return f"{self.a}+{self.b}i"
     def __repr__(self):
         return f"{type(self).typestr()}({repr(self.a)}, {repr(self.b)})"
 
@@ -954,9 +973,6 @@ class QQ(Field):
         return cls(self.rep * other.rep)
     def recip(self):
         return type(self)(1 / self.rep)
-
-
-
 
 
 
