@@ -1,4 +1,6 @@
 import algebra
 import pyalgebra
 
-a = algebra.base.ZZ(4)
+x = algebra.base.QQ(11, 3)
+
+print(x)
