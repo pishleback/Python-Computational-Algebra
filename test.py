@@ -7,7 +7,9 @@ class TestBase(unittest.TestCase):
                      algebra.base.Gaussian,
                      algebra.base.QQ,
                      algebra.base.ZZ.QuotientRing(12),
-                     algebra.base.ZZ.QuotientRing(13)]:
+                     algebra.base.ZZ.QuotientRing(13),
+                     algebra.polynomials.PolyOver(algebra.base.ZZ),
+                     algebra.polynomials.PolyOver(algebra.base.QQ)]:
             mset.test_axioms(self)
                         
 if __name__ == '__main__':

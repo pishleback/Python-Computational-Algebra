@@ -242,10 +242,27 @@ class Ring(NComRing):
     @classmethod
     def test_axioms(cls, test):
         super().test_axioms(test)
+        if cls.has_finite_units():
+            for unit in cls.all_units():
+                assert isinstance(unit, cls)
+                assert unit.is_unit()
+        
   
 ##    @classmethod
 ##    def convert(cls, x):
 ##        return super().convert(x)
+
+    @classmethod
+    def has_finite_units(cls):
+        try:
+            cls.all_units()
+        except NotImplementedError:
+            return False
+        else:
+            return True
+    @classmethod
+    def all_units(cls):
+        raise NotImplementedError()
 
     def exactdiv(self, other):
         assert (cls := type(self)) == type(other)
@@ -263,6 +280,8 @@ class Ring(NComRing):
             return True
         except NotDivisibleError:
             return False
+
+    
 
     #implement a/b as exact division
     #note that this is not compatible with builtin integer division, so builtin integers should
@@ -363,7 +382,7 @@ class UniqueFactorizationDomain(IntegralDomain):
                     return self.expand() == other.expand()
                 return False
             def __repr__(self):
-                return f"{ring}_Factorization({self.unit}; " + " * ".join([f"{f}^{p}" for f, p in self.powers.items()]) + ")"
+                return f"{ring}_Factorization({self.unit}; " + " * ".join([f"{add_mulbrac(str(f))}^{p}" for f, p in self.powers.items()]) + ")"
             def __mul__(self, other):
                 if (cls := type(self)) == type(other):
                     return cls.product([self, other])
@@ -387,6 +406,51 @@ class UniqueFactorizationDomain(IntegralDomain):
                     yield type(self)(1, dict(zip(fs, rep)))
             
         cls.Factorization = Factorization
+
+    @classmethod
+    def gcd(cls, x, y):
+        if x == 0:
+            return y
+        if y == 0:
+            return x
+        if x == y == 0:
+            raise ZeroDivisionError()
+        return cls.Factorization.gcd([x.factor(), y.factor()]).expand()
+
+    @classmethod
+    def gcd_list(cls, elems):
+        assert len(elems) >= 1
+        if len(elems) == 1:
+            g = elems[0]
+        elif len(elems) == 2:
+            g = cls.gcd(*elems)
+        else:
+            i = len(elems) // 2
+            g = cls.gcd(cls.gcd_list(elems[:i]), cls.gcd_list(elems[i:]))
+        return g
+
+    @classmethod
+    def lcm(cls, x, y):
+        if x == 0 or y == 0:
+            raise ZeroDivisionError()
+        x = cls.convert(x)
+        y = cls.convert(y)
+        g = cls.gcd(x, y)
+        m = x * y
+        q, r = divmod(m, g)
+        assert r == 0
+        return q
+
+    @classmethod
+    def lcm_list(cls, elems):
+        assert len(elems) >= 1
+        if len(elems) == 1:
+            return elems[0]
+        elif len(elems) == 2:
+            return cls.lcm(*elems)
+        else:
+            i = len(elems) // 2
+            return cls.lcm(cls.lcm_list(elems[:i]), cls.lcm_list(elems[i:]))
         
     @classmethod
     def test_axioms(cls, test):
@@ -461,48 +525,14 @@ class EuclideanDomain(PrincipalIdealDomain):
                             test.assertTrue(cls.are_associate(cls.gcd_list([a, b, c]), cls.Factorization.gcd([a.factor(), b.factor(), c.factor()]).expand()))
                             test.assertTrue(cls.are_associate(cls.lcm_list([a, b, c]), cls.Factorization.lcm([a.factor(), b.factor(), c.factor()]).expand()))
 
+    #reimplement (over factorization method) the gcd using euclidean algorithm. Also implement xgcd
     @classmethod
     def gcd(cls, x, y):
-        if x == 0 or y == 0:
+        if x == 0 and y == 0:
             raise ZeroDivisionError()
         while y != cls.int(0):
             x, y = y, x % y
         return x
-
-    @classmethod
-    def gcd_list(cls, elems):
-        assert len(elems) >= 1
-        if len(elems) == 1:
-            g = elems[0]
-        elif len(elems) == 2:
-            g = cls.gcd(*elems)
-        else:
-            i = len(elems) // 2
-            g = cls.gcd(cls.gcd_list(elems[:i]), cls.gcd_list(elems[i:]))
-        return g
-
-    @classmethod
-    def lcm(cls, x, y):
-        if x == 0 or y == 0:
-            raise ZeroDivisionError()
-        x = cls.convert(x)
-        y = cls.convert(y)
-        g = cls.gcd(x, y)
-        m = x * y
-        q, r = divmod(m, g)
-        assert r == 0
-        return q
-
-    @classmethod
-    def lcm_list(cls, elems):
-        assert len(elems) >= 1
-        if len(elems) == 1:
-            return elems[0]
-        elif len(elems) == 2:
-            return cls.lcm(*elems)
-        else:
-            i = len(elems) // 2
-            return cls.lcm(cls.lcm_list(elems[:i]), cls.lcm_list(elems[i:]))
 
     @classmethod
     def xgcd(cls, x, y):
@@ -732,6 +762,10 @@ class ZZ(EuclideanDomain):
                 test.assertEqual(cls(a * b), cls(a) * cls(b))
 
     @classmethod
+    def all_units(cls):
+        return [cls(1), cls(-1)]
+
+    @classmethod
     def can_factor(cls):
         return True
         
@@ -797,6 +831,10 @@ class Gaussian(EuclideanDomain):
     @classmethod
     def test_values(cls):
         return [cls(1, 2), cls(3, 4), cls(-2, 5), cls(0, 0), cls(1, 0), cls(0, 1), cls(11, 0), cls(13, 0)]
+
+    @classmethod
+    def all_units(cls):
+        return [cls(1, 0), cls(-1, 0), cls(0, 1), cls(0, -1)]
 
     @classmethod
     def can_factor(cls):

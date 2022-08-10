@@ -1,7 +1,9 @@
 from algebra import base
+from algebra import matricies
 import functools
-
-
+import heapq
+import itertools
+import random
 
 
 @functools.cache
@@ -9,6 +11,11 @@ def PolyOver(ring, var = "λ"):
     assert issubclass(ring, base.Ring)
 
     class Poly(base.Ring):
+        @classmethod
+        def test_values(cls):
+            values = ring.test_values()
+            return [cls([7 * c, 2]) for c in values[:5]] + [cls([2, -1, 3 * c]) for c in values[:5]]
+    
         @classmethod
         def typestr(cls):
             return f"{ring}[{var}]"
@@ -29,6 +36,21 @@ def PolyOver(ring, var = "λ"):
         def var(cls):
             return cls([0, 1])
 
+        @classmethod
+        def lagrange_interp(cls, points):
+            points = tuple((ring.convert(inp), ring.convert(out)) for inp, out in points)
+            n = len(points)
+            Mat = matricies.MatrixOver(ring)
+            M = Mat(n, n, [[points[r][0] ** c for c in range(n)] for r in range(n)])
+            v = Mat(n, 1, [[points[r][1]] for r in range(n)])
+            #need to solve Mx = v where x is the vector of coefficients
+            x = M.col_solve(v)
+            assert x.rows == n and x.cols == 1
+            ans = cls([x[i, 0] for i in range(n)])
+            for inp, out in points:
+                assert ans(inp) == out
+
+            return ans
         def __init__(self, rep):
             rep = tuple(ring.convert(x) for x in rep)
             while (False if len(rep) == 0 else rep[-1] == 0): #remove trailing zeros
@@ -102,9 +124,141 @@ def PolyOver(ring, var = "λ"):
                 for j, y in enumerate(other.rep):
                     rep[i + j] += x * y
             return cls(rep)
+        def degree(self):
+            #zero polynomial -> degree -1
+            if self == 0:
+                return None
+            else:
+                return len(self.rep) - 1
+        def __call__(self, obj):
+            obj = ring.convert(obj)
+            return type(obj).sum([c * obj ** p for p, c in enumerate(self.rep)])
 
-        def factor(self):
-            raise NotImplementedError()
+
+    if issubclass(ring, base.IntegralDomain):
+        class Poly(Poly, base.IntegralDomain):
+            #we implement divmod early as the algorithm can be used for exact division too
+            def divmod(self, other):
+                assert (cls := type(self)) == type(other)
+                if other == 0:
+                    raise ZeroDivisionError
+                quo = cls([])
+                rem = self
+                while True:
+                    if rem == 0:
+                        break
+                    elif rem.degree() < other.degree():
+                        break
+                    new_quo = cls([ring.int(0)] * (rem.degree() - other.degree()) + [rem[rem.degree()] / other[other.degree()]])
+                    rem = rem - new_quo * other
+                    quo = quo + new_quo
+                return quo, rem
+            def exactdiv(self, other):
+                assert (cls := type(self)) == type(other)
+                q, r = self.divmod(other) #this only raises NotDivisibleError in the base ring if they are not divisible here too
+                if r == 0:
+                    return q
+                else:
+                    raise base.NotDivisibleError()
+
+    if issubclass(ring, base.UniqueFactorizationDomain):
+        class Poly(Poly, base.UniqueFactorizationDomain):
+            @classmethod
+            def can_factor(cls):
+                return ring.can_factor() and ring.has_finite_units()
+            
+            def factor(self):
+                import sympy
+##                if ring == base.ZZ:
+##                    x = sympy.symbols("x")
+##                    s_poly = sum((x ** p * sympy.Integer(c.rep) for p, c in enumerate(self.rep)), sympy.Integer(0))
+##                    s_poly = sympy.poly(s_poly, x, domain = sympy.ZZ)
+##                    mult, factors = s_poly.factor_list()
+##                    mult = ring(int(mult))
+##                    mult = mult.factor()
+##                    mult = type(self).Factorization(self.convert(mult.unit), {self.convert(f) : p for f, p in mult.powers.items()})
+##                    
+##                    factors = {type(self)(tuple(reversed(tuple(ring(int(coeff)) for coeff in poly.all_coeffs())))) : power for poly, power in factors}
+##                    factors = type(self).Factorization(1, factors)
+##                    return mult * factors
+
+                #kronekers method over general UFDs
+                #need to add squarefree factorization to speed this up
+                #also finding rational roots
+                m = ring.gcd_list(self.rep)
+                f = self / m
+
+                def factor_primitive_kronekers(f):                    
+                    assert f.degree() != 0
+                    if f.degree() == 1:
+                        return type(self).Factorization(type(self).int(1), {f : 1})
+                    
+                    def possible_factors(f):
+                        #we are reduced to factoring m in ring and f in cls
+                        #self = m * f(x)
+                        k = f.degree() // 2
+                        #if f(x) factors as g(x)h(x) then wolg we need only check g(x) up to degree k
+                        def yield_points():
+                            yield 0
+                            n = 0
+                            while True:
+                                n += 1
+                                yield n
+                                yield -n
+                        yield_points = yield_points()
+                        extra = 10 * (k + 1) #can try tweaking this
+                        assert extra >= 0
+                        
+                        points = [next(yield_points) for _ in range(k + 1 + extra)]                
+                        f_at_points = []
+                        for x in points:
+                            fx = f(ring.int(x))
+                            if fx == 0:
+                                #found an irreducible factor already
+                                yield type(self).var() - type(self).int(x)
+                                assert False #we know this factor works so should never be here
+                            f_at_points.append(fx)
+                        points = [ring.int(x) for x in points]
+                        
+                        f_at_points_divs = [list(f(x).factor().divisors()) for x in points]
+
+                        idxs = heapq.nsmallest(k+1, range(k + 1 + extra), key = lambda i : len(f_at_points_divs[i]))
+                        points = [points[i] for i in idxs]
+                        f_at_points_divs = [f_at_points_divs[i] for i in idxs]
+                        f_at_points_divs = [sum([[u * d.expand() for d in divs] for u in ring.all_units()], []) for divs in f_at_points_divs]
+                        all_divs = list(itertools.product(*f_at_points_divs))
+                        random.shuffle(all_divs)
+                        for divs in all_divs:
+                            #divs ranges over a finite set of possible values of g(x) at points
+                            #we can reconstruct g from this using lagrange interpolation
+                            try:
+                                g = type(self).lagrange_interp(zip(points, divs))
+                            except matricies.NoSolution:
+                                pass
+                            else:
+                                if g.degree() > 0:
+                                    yield g
+
+                    for g in possible_factors(f):
+                        try:
+                            new_f = f / g
+                        except base.NotDivisibleError:
+                            pass
+                        else:
+                            return factor_primitive_kronekers(g) * factor_primitive_kronekers(new_f)
+                            
+                    return type(self).Factorization(type(self).int(1), {f : 1})
+
+                m_factored = m.factor()
+                m_factored = type(self).Factorization(type(self).convert(m_factored.unit), {type(self).convert(irr) : p for irr, p in m_factored.powers.items()})
+                return m_factored * factor_primitive_kronekers(f)
+                
+
+    if issubclass(ring, base.Field):
+        class Poly(Poly, base.EuclideanDomain):
+            def norm(self):
+                return self.degree()
+            #divmod is defined over an integral domain
 
     return Poly
 

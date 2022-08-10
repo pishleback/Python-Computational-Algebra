@@ -41,11 +41,13 @@ def assoc_opp(f):
 class SizeMismatch(Exception):
     pass
 
+class NoSolution(Exception):
+    pass
+
 
 @functools.cache
 def MatrixOver(ring):
     assert issubclass(ring, base.Ring)
-
     class Matrix(base.MathsSet):
         @classmethod
         def test_axioms(cls, test):
@@ -54,6 +56,13 @@ def MatrixOver(ring):
         @classmethod
         def typestr(cls):
             return f"Mat({ring})"
+
+        @classmethod
+        def sum(cls, rows, cols, mats):
+            ans = cls.zero(rows, cols)
+            for mat in mats:
+                ans += mat
+            return ans
 
         @classmethod
         @assoc_opp
@@ -218,7 +227,7 @@ def MatrixOver(ring):
         def col(self, c):
             return self.transpose().row(c).transpose()
         def minor(self, row = None, col = None):
-            return type(self)(self.rows - 1, self.cols - 1, [[self[r, c] for c in range(self.cols) if c != col] for r in range(self.rows) if r != row])
+            return type(self)(self.rows if row is None else self.rows - 1, self.cols if col is None else self.cols - 1, [[self[r, c] for c in range(self.cols) if c != col] for r in range(self.rows) if r != row])
 
         def row_swap(self, r1, r2): #r1 <-> r2
             assert type(r1) == int and 0 <= r1 < self.rows
@@ -434,10 +443,150 @@ def MatrixOver(ring):
             # => det(self) = det(H) / det(U)
             return ring.product([H[i, i] for i in range(n)]) / det_U
 
+        def row_span(self):
+            return SpanOver(ring)(1, self.cols, [self.row(r) for r in range(self.rows)])
+        def col_span(self):
+            return SpanOver(ring)(self.rows, 1, [self.col(c) for c in range(self.cols)])
+        def row_kernel(self):
+            U, _, pivs, H = self.hermite_algorithm()
+            return SpanOver(ring)(1, self.rows, [U.row(r) for r in range(len(pivs), self.rows)])
+        def col_kernel(self):
+            return self.transpose().row_kernel().transpose()
+
+        def col_solve(self, vec):
+            #solve self * x = vec for x
+            assert self.cols == vec.rows and vec.cols == 1
+            U, det_U, pivots, H = self.hermite_algorithm()
+            
+            mat = type(self).join_cols([self.col(c) for c in range(self.cols)] + [-vec])
+            ker_basis = mat.col_kernel().basis
+            g, coeffs = ring.xgcd_list([b[self.cols, 0] for b in ker_basis])
+            if g.is_unit():
+                coeffs = [c / g for c in coeffs]
+            else:
+                raise NoSolution("No solution")
+
+            sol = Matrix.sum(self.cols + 1, 1, [coeffs[i] * ker_basis[i] for i in range(len(ker_basis))])
+            sol = sol.minor(row = self.cols)
+            assert self * sol == vec
+            return sol
+            
     return Matrix
     
 
 
+
+
+
+
+
+@functools.cache
+def SpanOver(ring):
+    assert issubclass(ring, base.Ring)
+    Matrix = MatrixOver(ring)
+
+    def mat_to_row(rows, cols, mat):
+        assert mat.rows == rows
+        assert mat.cols == cols
+        return Matrix(1, cols * rows, [[mat[i % rows, i // rows] for i in range(cols * rows)]])
+
+    def row_to_mat(rows, cols, row_mat):
+        assert row_mat.cols == rows * cols
+        assert row_mat.rows == 1
+        return Matrix(rows, cols, [[row_mat[0, r + c * rows] for c in range(cols)] for r in range(rows)])
+    
+    class Span():
+        def __init__(self, rows, cols, matricies):
+            assert type(rows) == int and rows >= 0
+            assert type(cols) == int and rows >= 0
+            for matrix in matricies:
+                assert isinstance(matrix, Matrix)
+                assert matrix.rows == rows
+                assert matrix.cols == cols
+                
+            self.rows = rows
+            self.cols = cols
+
+            if len(matricies) == 0:
+                self.basis = tuple([])
+            else:
+                _, _, pivs, H = Matrix.join_rows([mat_to_row(self.rows, self.cols, mat) for mat in matricies]).hermite_algorithm()
+                self.basis = tuple(row_to_mat(self.rows, self.cols, H.row(i)) for i in range(len(pivs)))
+        def __str__(self):
+            if len(self.basis) == 0:
+                return "{0}"
+            else:
+                rows = [""] * self.rows
+                for idx, mat in enumerate(self.basis):
+                    if idx != 0:
+                        for r in range(self.rows):
+                            if r == self.rows - 1:
+                                rows[r] += " , "
+                            else:
+                                rows[r] += "   "
+                    mat_str_rows = str(mat).split("\n")
+                    for r in range(self.rows):
+                        rows[r] += mat_str_rows[r]
+                return "\n".join(rows)
+        def __repr__(self):
+            return "Span(" + ", ".join(repr(mat) for mat in self.basis) + ")"
+
+        def __add__(self, other):
+            if (cls := type(self)) == type(other):
+                if (rows := self.rows) == other.rows and (cols := self.cols) == other.cols:
+                    return cls(rows, cols, self.basis + other.basis)
+            elif type(other) == Matrix:
+                return self.as_offsetspan() + other
+            return NotImplemented
+        def __radd__(self, other):
+            if type(other) == Matrix:
+                return other + self.as_offsetspan()
+            return NotImplemented
+        def __and__(self, other):
+            if (cls := type(self)) == type(other):
+                if (rows := self.rows) == other.rows and (cols := self.cols) == other.cols:
+                    metamatrix = Matrix.join_rows([mat_to_row(self.rows, self.cols, mat) for mat in self.basis] + [mat_to_row(other.rows, other.cols, mat) for mat in other.basis])
+                    ker = metamatrix.row_kernel()
+
+                    basis_rows = []
+                    for coeffs in ker.basis:
+                        basis_row = Matrix.zero(1, metamatrix.cols)                    
+                        assert coeffs.cols == self.dimention() + other.dimention()
+                        for i in range(0, self.dimention()):
+                            basis_row += coeffs[0, i] * metamatrix.row(i)
+                        basis_rows.append(basis_row)
+
+                    return cls(rows, cols, [row_to_mat(self.rows, self.cols, row) for row in basis_rows])
+            return NotImplemented
+
+        def __mul__(self, other):
+            if type(other) == Matrix:
+                if other.rows == self.cols:
+                    return type(self)(self.rows, other.cols, [mat * other for mat in self.basis])
+                else:
+                    raise Exception("Dimentions don't match for Span * Mat")
+            return NotImplemented
+
+        def __rmul__(self, other):
+            if type(other) == Matrix:
+                if other.cols == self.rows:
+                    return type(self)(other.rows, self.cols, [other * mat for mat in self.basis])
+                else:
+                    raise Exception("Dimentions don't match for Mat * Span")
+            return NotImplemented
+
+        def dimention(self):
+            return len(self.basis)
+        def sample(self):
+            if self.dimention == 0:
+                raise Exception("No elements to sample from")
+            else:
+                return self.basis[0]
+
+        def transpose(self):
+            return type(self)(self.cols, self.rows, [mat.transpose() for mat in self.basis])
+
+    return Span
 
 
 
@@ -552,108 +701,6 @@ if False:
         def deprojectivize(rows, cols, mat):
             row = mat_to_row(rows, cols, mat)
             return row.minor(col = 0), row[0, 0]
-
-
-        class Span():
-            def __init__(self, rows, cols, matricies):
-                assert type(rows) == int and rows >= 0
-                assert type(cols) == int and rows >= 0
-                for matrix in matricies:
-                    assert isinstance(matrix, MatrixOver(ring))
-                    assert matrix.rows == rows
-                    assert matrix.cols == cols
-                    
-                self.rows = rows
-                self.cols = cols
-
-                if len(matricies) == 0:
-                    self.basis = tuple([])
-                else:
-                    _, _, pivs, H = MatrixOver(ring).join_rows([mat_to_row(self.rows, self.cols, mat) for mat in matricies]).hermite_algorithm()
-                    self.basis = tuple(row_to_mat(self.rows, self.cols, H.row(i)) for i in range(len(pivs)))
-            def __str__(self):
-                if len(self.basis) == 0:
-                    return "{0}"
-                else:
-                    rows = [""] * self.rows
-                    for idx, mat in enumerate(self.basis):
-                        if idx != 0:
-                            for r in range(self.rows):
-                                if r == self.rows - 1:
-                                    rows[r] += " , "
-                                else:
-                                    rows[r] += "   "
-                        mat_str_rows = str(mat).split("\n")
-                        for r in range(self.rows):
-                            rows[r] += mat_str_rows[r]
-                    return "\n".join(rows)
-            def __repr__(self):
-                return "Span(" + ", ".join(repr(mat) for mat in self.basis) + ")"
-
-            def __add__(self, other):
-                if (cls := type(self)) == type(other):
-                    if (rows := self.rows) == other.rows and (cols := self.cols) == other.cols:
-                        return cls(rows, cols, self.basis + other.basis)
-                elif type(other) == MatrixOver(ring):
-                    return self.as_offsetspan() + other
-                return NotImplemented
-            def __radd__(self, other):
-                if type(other) == MatrixOver(ring):
-                    return other + self.as_offsetspan()
-                return NotImplemented
-            def __and__(self, other):
-                if (cls := type(self)) == type(other):
-                    if (rows := self.rows) == other.rows and (cols := self.cols) == other.cols:
-                        metamatrix = MatrixOver(ring).join_rows([mat_to_row(self.rows, self.cols, mat) for mat in self.basis] + [mat_to_row(other.rows, other.cols, mat) for mat in other.basis])
-                        ker = metamatrix.row_kernel()
-
-                        basis_rows = []
-                        for coeffs in ker.basis:
-                            basis_row = MatrixOver(ring).zero(1, metamatrix.cols)                    
-                            assert coeffs.cols == self.dimention() + other.dimention()
-                            for i in range(0, self.dimention()):
-                                basis_row += coeffs[0, i] * metamatrix.row(i)
-                            basis_rows.append(basis_row)
-
-                        return cls(rows, cols, [row_to_mat(self.rows, self.cols, row) for row in basis_rows])
-                return NotImplemented
-
-            def __mul__(self, other):
-                if type(other) == MatrixOver(ring):
-                    if other.rows == self.cols:
-                        return type(self)(self.rows, other.cols, [mat * other for mat in self.basis])
-                    else:
-                        raise Exception("Dimentions don't match for Span * Mat")
-                return NotImplemented
-
-            def __rmul__(self, other):
-                if type(other) == MatrixOver(ring):
-                    if other.cols == self.rows:
-                        return type(self)(other.rows, self.cols, [other * mat for mat in self.basis])
-                    else:
-                        raise Exception("Dimentions don't match for Mat * Span")
-                return NotImplemented
-
-            def dimention(self):
-                return len(self.basis)
-            def sample(self):
-                if self.dimention == 0:
-                    raise Exception("No elements to sample from")
-                else:
-                    return self.basis[0]
-
-            def transpose(self):
-                return type(self)(self.cols, self.rows, [mat.transpose() for mat in self.basis])
-
-            def as_offsetspan(self):
-                homs = []
-                for mat in self.basis:
-                    homs.append(projectivize(self.rows, self.cols, 1, mat))
-                homs.append(projectivize(self.rows, self.cols, 1, MatrixOver(ring).zero(self.rows, self.cols)))
-                return OffsetSpanOver(ring)(self.rows, self.cols, SpanOver(ring)(1, self.rows * self.cols + 1, homs))
-
-
-
 
 
 
