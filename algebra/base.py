@@ -3,6 +3,21 @@ from fractions import Fraction as Frac
 import functools
 import itertools
 
+def add_mulbrac(string):
+    def needs_brac(string):
+        if len(string) <= 1:
+            return False
+        if string[0] in {"+", "-"}:
+            string = string[1:]
+        for char in string:
+            if char in "+-":
+                return True
+        return False
+    if needs_brac(string):
+        return "(" + string + ")"
+    else:
+        return string
+
 def cached_classmethod(func):
     @functools.cache
     def do_func(*args, **kwargs):
