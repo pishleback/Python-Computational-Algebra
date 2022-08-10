@@ -248,6 +248,16 @@ class Ring(AbGroup):
 
 class IntegralDomain(Ring):
     @classmethod
+    def are_associate(cls, a, b):
+        try:
+            a / b
+            b / a
+        except NotDivisibleError:
+            return False
+        else:
+            return True
+    
+    @classmethod
     def test_axioms(cls, test):
         super().test_axioms(test)
         values = cls.test_values()
@@ -261,25 +271,93 @@ class IntegralDomain(Ring):
 
 
 class UniqueFactorizationDomain(IntegralDomain):
+    @classmethod
+    def test_axioms(cls, test):
+        super().test_axioms(test)
+        if cls.can_factor():
+            values = cls.test_values()
+            for a in values:
+                if a == 0:
+                    test.assertEqual(a.factor(), None)
+                else:
+                    factored = a.factor()
+                    test.assertEqual(factored.expand(), a)
+                    fs = list(factored.powers.keys())
+                    for i in range(len(fs)):
+                        for j in range(i + 1, len(fs)):
+                            test.assertFalse(cls.are_associate(fs[i], fs[j]))
+
+            for a in values:
+                for b in values:
+                    if a != 0 and b != 0:
+                        test.assertEqual(a.factor() * b.factor(), (a * b).factor())
+
+    @classmethod
+    def can_factor(cls):
+        return False
+                        
     @cached_classmethod
-    def FactorizationObj(cls):
-        class FactorizationObj():
+    def FactorizationCls(ring):
+        if not ring.can_factor():
+            raise NotImplementedError() #set cls.can_factor to return true if factorization is possible
+        
+        class Factorization():
+            @classmethod
+            def gcd(cls, items):
+                keys, items = cls.make_compatible(items)
+                return cls(1, {key : min(factorization[key] for factorization in items) for key in keys})
+
+            @classmethod
+            def lcm(cls, items):
+                keys, items = cls.make_compatible(items)
+                return cls(1, {key : max(factorization[key] for factorization in items) for key in keys})
+
+
             def __init__(self, unit, powers):
-                assert isinstance(unit, cls)
+                unit = ring.convert(unit)
                 assert type(powers) == dict
-                for f, p in powers.items():
-                    assert isinstance(f, cls)
+                powers = {ring.convert(f) : p for f, p in powers.items()}
+                for p in powers.values():
                     assert type(p) == int
                 self.unit = unit
                 self.powers = powers
-        return FactorizationObj
+
+            def __eq__(self, other):
+                if (cls := type(self)) == type(other):
+                    return self.expand() == other.expand()
+                return False
+                
+            def __repr__(self):
+                return f"{ring}_Factorization({self.unit} " + " ".join([f"{f}^{p}" for f, p in self.powers.items()]) + ")"
+            
+            def expand(self):
+                return self.unit * ring.product([f ** p for f, p in self.powers.items()])
+            
+            def __mul__(self, other):
+                if (cls := type(self)) == type(other):
+                    unit = self.unit * other.unit
+                    powers = {f : p for f, p in self.powers.items()}
+                    for g, q in other.powers.items():
+                        for f in powers:
+                            if ring.are_associate(f, g):
+                                #we want to replace g^q with f^q
+                                #there will be a unit factor induced by this
+                                #the unit factor is (g/f)^q
+                                powers[f] += q
+                                unit *= (g / f) ** q
+                                break
+                        else:
+                            powers[g] = q
+                    return cls(unit, powers)
+                return NotImplemented
+        return Factorization
 
     @classmethod
     def Factorization(cls, *args, **kwargs):
-        return cls.FactorizationObj()(*args, **kwargs)
+        return cls.FactorizationCls()(*args, **kwargs)
 
     def factor(self):
-        pass
+        raise NotImplementedError()
 
     def is_irreducible(self):
         return False
@@ -527,6 +605,10 @@ class Field(EuclideanDomain):
         else:
             raise NotImplementedError()
 
+    @classmethod
+    def can_factor(cls):
+        return True
+
     #should implement either recip or exactdiv to get a field
     def exactdiv(self, other):
         assert (cls := type(self)) == type(other)
@@ -545,6 +627,11 @@ class Field(EuclideanDomain):
     def mod(self, other):
         assert (cls := type(self)) == type(other)
         return 0
+    def factor(self):
+        if self == 0:
+            return None
+        else:
+            return self.Factorization(self, {})
 
 
 
@@ -568,6 +655,10 @@ class ZZ(EuclideanDomain):
                 test.assertEqual(cls(a + b), cls(a) + cls(b))
                 test.assertEqual(cls(a - b), cls(a) - cls(b))
                 test.assertEqual(cls(a * b), cls(a) * cls(b))
+
+    @classmethod
+    def can_factor(cls):
+        return True
         
     @classmethod
     def int(cls, n):
@@ -606,6 +697,19 @@ class ZZ(EuclideanDomain):
     def mod(self, other):
         assert (cls := type(self)) == type(other)
         return cls(self.rep % other.rep)
+
+    def factor(self):
+        if self == 0:
+            return None
+        import sympy
+        fs = sympy.factorint(self.rep)
+        unit = 1
+        if -1 in fs:
+            unit = -1
+            del fs[-1]
+        powers = {type(self)(f) : p for f, p in fs.items()}
+        unit = type(self)(unit)
+        return type(self).Factorization(unit, powers)
     
 ##    def __add__(self, other):
 ##        if (cls := type(self)) == type(other):
