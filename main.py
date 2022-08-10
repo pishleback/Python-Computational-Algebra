@@ -1,9 +1,10 @@
 import algebra
 import pyalgebra
 
-x = algebra.base.ZZ.Factorization(1, {2 : 3, 3 : 1})
-y = algebra.base.ZZ.Factorization(1, {-2 : 5, -5 : 1})
+G = algebra.base.Gaussian
 
 
-print(algebra.base.ZZ.Factorization.lcm([x, y]))
-
+n = G(13, 0).factor().list()[0]
+Q = G.QuotientRing(n)
+x = Q.convert(G(1, 1)) + G(1, 1)
+print(x)

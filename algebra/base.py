@@ -1,6 +1,7 @@
 import warnings
 from fractions import Fraction as Frac
 import functools
+import itertools
 
 def cached_classmethod(func):
     @functools.cache
@@ -310,16 +311,15 @@ class UniqueFactorizationDomain(IntegralDomain):
                             powers[g][i] = q
                 return units, powers
 
+            #it is nice how product, gcd, lcm corespond to sum, min, max.
             @classmethod
             def product(cls, facts):
                 units, powers = cls.match(facts)
                 return cls(ring.product(units), {f : sum(ps) for f, ps in powers.items()})
-            
             @classmethod
             def gcd(cls, facts):
                 units, powers = cls.match(facts)
                 return cls(ring.int(1), {f : min(ps) for f, ps in powers.items()})
-
             @classmethod
             def lcm(cls, facts):
                 units, powers = cls.match(facts)
@@ -329,26 +329,38 @@ class UniqueFactorizationDomain(IntegralDomain):
                 unit = ring.convert(unit)
                 assert type(powers) == dict
                 for p in powers.values():
-                    assert type(p) == int
+                    assert type(p) == int and p >= 0
                 powers = {ring.convert(f) : p for f, p in powers.items() if p != 0}
                 self.unit = unit
                 self.powers = powers
-
             def __eq__(self, other):
                 if (cls := type(self)) == type(other):
                     return self.expand() == other.expand()
                 return False
-                
             def __repr__(self):
-                return f"{ring}_Factorization({self.unit} " + " ".join([f"{f}^{p}" for f, p in self.powers.items()]) + ")"
-            
-            def expand(self):
-                return self.unit * ring.product([f ** p for f, p in self.powers.items()])
-            
+                return f"{ring}_Factorization({self.unit}; " + " * ".join([f"{f}^{p}" for f, p in self.powers.items()]) + ")"
             def __mul__(self, other):
                 if (cls := type(self)) == type(other):
                     return cls.product([self, other])
                 return NotImplemented
+            
+            def expand(self):
+                return self.unit * ring.product([f ** p for f, p in self.powers.items()])
+
+            #list all irreducible factors repeated by multiplicity
+            def list(self):
+                factors = []
+                for f, p in self.powers.items():
+                    for _ in range(p):
+                        factors.append(f)
+                return factors
+            #yield all divisors up to associates
+            def divisors(self):
+                fs = list(self.powers.keys())
+                powers = [list(range(self.powers[f] + 1)) for f in fs]
+                for rep in itertools.product(*powers):
+                    yield type(self)(1, dict(zip(fs, rep)))
+            
         cls.Factorization = Factorization
         
     @classmethod
@@ -497,12 +509,16 @@ class EuclideanDomain(PrincipalIdealDomain):
 
     def norm(self) -> int:
         raise NotImplementedError()
+    #implement either divmod OR floordiv and mod
+    def divmod(self, other):
+        assert (cls := type(self)) == type(other)
+        return self.floordiv(other), self.mod(other)
     def floordiv(self, other):
         assert (cls := type(self)) == type(other)
-        raise NotImplementedError()
+        return self.divmod(other)[0]
     def mod(self, other):
         assert (cls := type(self)) == type(other)
-        raise NotImplementedError()
+        return self.divmod(other)[1]
     
     def exactdiv(self, other):
         assert (cls := type(self)) == type(other)
@@ -541,7 +557,12 @@ class EuclideanDomain(PrincipalIdealDomain):
         else:
             return other.mod(self)
     def __divmod__(self, other):
-        return self.__floordiv__(other), self.__mod__(other)
+        try:
+            other = type(self).convert(other)
+        except NotImplementedError:
+            return NotImplemented
+        else:
+            return self.divmod(other)
     
     @cached_classmethod
     def QuotientRing(ring, n):
@@ -716,7 +737,7 @@ class ZZ(EuclideanDomain):
         assert (cls := type(self)) == type(other)
         return cls(self.rep * other.rep)
     def norm(self) -> int:
-        if self.rep == 0:
+        if self == 0:
             return None
         else:
             return abs(self.rep)
@@ -740,35 +761,146 @@ class ZZ(EuclideanDomain):
         unit = type(self)(unit)
         return type(self).Factorization(unit, powers)
     
-##    def __add__(self, other):
-##        if (cls := type(self)) == type(other):
-##            return cls(self.rep + other.rep)
-##        return super().__add__(other)
-##    def __radd__(self, other):
-##        if (cls := type(self)) == type(other):
-##            return cls(other.rep + self.rep)
-##        return super().__radd__(other)
-##    def __sub__(self, other):
-##        if (cls := type(self)) == type(other):
-##            return cls(self.rep - other.rep)
-##        return super().__sub__(other)
-##    def __rsub__(self, other):
-##        if (cls := type(self)) == type(other):
-##            return cls(other.rep - self.rep)
-##        return super().__rsub__(other)
-##    def __mul__(self, other):
-##        if (cls := type(self)) == type(other):
-##            return cls(self.rep * other.rep)
-##        return super().__mul__(other)
-##    def __rmul__(self, other):
-##        if (cls := type(self)) == type(other):
-##            return cls(other.rep * self.rep)
-##        return super().__rmul__(other)
-##    def __divmod__(self, other):
-##        if (cls := type(self)) == type(other):
-##            q, r = divmod(self.rep, other.rep)
-##            return cls(q), cls(r)
-##        return super().__floordiv__(other), super().__mod__(other)
+
+
+
+class Gaussian(EuclideanDomain):
+    @classmethod
+    def typestr(cls):
+        return "ℤi"
+    
+    @classmethod
+    def test_values(cls):
+        return [cls(1, 2), cls(3, 4), cls(-2, 5), cls(0, 0), cls(1, 0), cls(0, 1), cls(11, 0), cls(13, 0)]
+
+    @classmethod
+    def can_factor(cls):
+        return True
+        
+    @classmethod
+    def int(cls, n):
+        return cls(n, 0)
+    
+    def __init__(self, a, b):
+        assert type(a) == int
+        assert type(b) == int
+        self.a = a
+        self.b = b
+
+    def __str__(self):
+        return f"{self.a} + {self.b}i"
+    def __repr__(self):
+        return f"{type(self).typestr()}({repr(self.a)}, {repr(self.b)})"
+
+    def hash(self):
+        return hash((self.a, self.b))
+    def equal(self, other):
+        assert (cls := type(self)) == type(other)
+        return self.a == other.a and self.b == other.b
+    def add(self, other):
+        assert (cls := type(self)) == type(other)
+        return cls(self.a + other.a, self.b + other.b)
+    def neg(self):
+        return type(self)(-self.a, -self.b)
+    def mul(self, other):
+        assert (cls := type(self)) == type(other)
+        return cls(self.a * other.a - self.b * other.b, self.a * other.b + self.b * other.a)
+    def norm(self) -> int:
+        if self == 0:
+            return None
+        else:
+            return self.a ** 2 + self.b ** 2
+    def divmod(self, other):
+        assert (cls := type(self)) == type(other)
+        if other == 0:
+            raise ZeroDivisionError()
+        d = other.norm()
+        x_prime = Frac(int(self.a) * int(other.a) + int(self.b) * int(other.b), int(d))
+        y_prime = Frac(int(self.b) * int(other.a) - int(self.a) * int(other.b), int(d))
+        x, y = round(x_prime), round(y_prime)
+        q = cls(x, y)
+        r = self - q * other
+        return q, r
+
+    def factor(self):
+        if self == 0:
+            return None
+        
+        import sympy
+        cls = type(self)
+        int_fs = sympy.factorint(self.norm())
+        assert not -1 in int_fs
+
+        def psqrt(n, p):
+            assert sympy.ntheory.isprime(p)
+            assert sympy.ntheory.legendre_symbol(n, p) == 1
+
+            Q = p - 1
+            S = 0
+            while Q % 2 == 0:
+                Q //= 2
+                S += 1
+
+            for z in range(p):
+                if sympy.ntheory.legendre_symbol(z, p) == -1:
+                    break
+            else:
+                assert False
+
+            M = S
+            c = pow(z, Q, p)
+            t = pow(n, Q, p)
+            R = pow(n, (Q + 1) // 2, p)
+            while True:
+                if t == 0:
+                    return 0
+                elif t == 1:
+                    return R
+                tp = t
+                for i in range(M):
+                    if tp == 1:
+                        break
+                    tp = pow(tp, 2, p)
+                else:
+                    raise Exception()
+                b = pow(c, 2 ** (M - i - 1), p)
+                M = i
+                c = pow(b, 2, p)
+                t = (t * pow(b, 2, p)) % p
+                R = (R * b) % p
+
+        def find_two_sq_sum(p):
+            #p is a prime congruent to 1 mod 4
+            #find a, b such that a^2 + b^2 = p
+            m = psqrt(-1, p)
+            #we have p dividing m^2+1 = (m+i)(m-i)
+            g = cls.gcd(cls(p, 0), cls(m, 1))
+            a, b = g.a, g.b
+            assert a ** 2 + b ** 2 == p
+            return a, b
+        
+        powers = {}
+        for p in int_fs:
+            if p == 2:
+                powers[cls(1, 1)] = int_fs[2]
+            elif p % 4 == 3:
+                assert int_fs[p] % 2 == 0
+                powers[cls(p, 0)] = int_fs[p] // 2
+
+        omf_part = (self // cls.Factorization(cls.int(1), powers).expand()) #one mod four part
+        for p in int_fs:
+            if p % 4 == 1:
+                a, b = find_two_sq_sum(p)
+                for d in [cls(a, b), cls(a, -b)]:
+                    powers[d] = 0
+                    while omf_part % d == 0:
+                        powers[d] += 1
+                        omf_part //= d
+        i = cls(0, 1)
+        assert omf_part in [1, i, -1, -i]
+        unit = self / cls.Factorization(cls.int(1), powers).expand()
+        return cls.Factorization(unit, powers)
+
 
 class QQ(Field):
     @classmethod
@@ -822,26 +954,6 @@ class QQ(Field):
         return cls(self.rep * other.rep)
     def recip(self):
         return type(self)(1 / self.rep)
-
-
-##
-##@functools.cache
-##def Modulo(n):
-##    ring = type(n)
-##    assert issubclass(ring, EuclideanDomain)
-##    
-##    
-##        
-##    QuotientRing.ring = ring
-##    QuotientRing.n = n
-##
-##    if issubclass(ring, UniqueFactorizationDomain):
-##        if n.is_irreducible():
-##            class QuotientRing(QuotientRing, Field):
-##                pass
-##
-##    return QuotientRing
-
 
 
 
