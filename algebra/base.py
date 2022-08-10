@@ -15,6 +15,11 @@ class NumType(type):
     def __init__(self, name, bases, dct):
         super().__init__(name, bases, dct)
 
+    def __new__(*args, **kwargs):
+        x = type.__new__(*args, **kwargs)
+        x.init_cls()
+        return x
+
     def __str__(self):
         ans = self.typestr()
         if ans is None:
@@ -24,9 +29,16 @@ class NumType(type):
 
 class MathsSet(metaclass = NumType):
     @classmethod
+    def init_cls(cls):
+        #use to create classes specific to each ring.
+        #for example to create a unique Factorization class for each new type of ring
+        pass
+
+    @classmethod
     def test_values(cls):
         warnings.warn(f"No test values provided for {cls}", RuntimeWarning)
         return []
+    
     @classmethod
     def test_axioms(cls, test):
         pass
@@ -272,6 +284,74 @@ class IntegralDomain(Ring):
 
 class UniqueFactorizationDomain(IntegralDomain):
     @classmethod
+    def init_cls(cls):
+        super().init_cls()
+        ring = cls
+        class Factorization():
+            @classmethod
+            def match(cls, facts):
+                facts = list(facts)
+                for a in facts:
+                    assert isinstance(a, cls)
+                units = [a.unit for a in facts]
+                powers = {}
+                for i, a in enumerate(facts):
+                    for g, q in a.powers.items():
+                        for f in powers:
+                            if ring.are_associate(f, g):
+                                #we want to replace g^q with f^q
+                                #there will be a unit factor induced by this
+                                #the unit factor is (g/f)^q
+                                powers[f][i] = q
+                                units[i] *= (g / f) ** q
+                                break
+                        else:
+                            powers[g] = [0] * len(facts)
+                            powers[g][i] = q
+                return units, powers
+
+            @classmethod
+            def product(cls, facts):
+                units, powers = cls.match(facts)
+                return cls(ring.product(units), {f : sum(ps) for f, ps in powers.items()})
+            
+            @classmethod
+            def gcd(cls, facts):
+                units, powers = cls.match(facts)
+                return cls(ring.int(1), {f : min(ps) for f, ps in powers.items()})
+
+            @classmethod
+            def lcm(cls, facts):
+                units, powers = cls.match(facts)
+                return cls(ring.int(1), {f : max(ps) for f, ps in powers.items()})
+
+            def __init__(self, unit, powers):
+                unit = ring.convert(unit)
+                assert type(powers) == dict
+                for p in powers.values():
+                    assert type(p) == int
+                powers = {ring.convert(f) : p for f, p in powers.items() if p != 0}
+                self.unit = unit
+                self.powers = powers
+
+            def __eq__(self, other):
+                if (cls := type(self)) == type(other):
+                    return self.expand() == other.expand()
+                return False
+                
+            def __repr__(self):
+                return f"{ring}_Factorization({self.unit} " + " ".join([f"{f}^{p}" for f, p in self.powers.items()]) + ")"
+            
+            def expand(self):
+                return self.unit * ring.product([f ** p for f, p in self.powers.items()])
+            
+            def __mul__(self, other):
+                if (cls := type(self)) == type(other):
+                    return cls.product([self, other])
+                return NotImplemented
+        cls.Factorization = Factorization
+        
+    @classmethod
     def test_axioms(cls, test):
         super().test_axioms(test)
         if cls.can_factor():
@@ -295,71 +375,15 @@ class UniqueFactorizationDomain(IntegralDomain):
     @classmethod
     def can_factor(cls):
         return False
-                        
-    @cached_classmethod
-    def FactorizationCls(ring):
-        if not ring.can_factor():
-            raise NotImplementedError() #set cls.can_factor to return true if factorization is possible
-        
-        class Factorization():
-            @classmethod
-            def gcd(cls, items):
-                keys, items = cls.make_compatible(items)
-                return cls(1, {key : min(factorization[key] for factorization in items) for key in keys})
-
-            @classmethod
-            def lcm(cls, items):
-                keys, items = cls.make_compatible(items)
-                return cls(1, {key : max(factorization[key] for factorization in items) for key in keys})
-
-
-            def __init__(self, unit, powers):
-                unit = ring.convert(unit)
-                assert type(powers) == dict
-                powers = {ring.convert(f) : p for f, p in powers.items()}
-                for p in powers.values():
-                    assert type(p) == int
-                self.unit = unit
-                self.powers = powers
-
-            def __eq__(self, other):
-                if (cls := type(self)) == type(other):
-                    return self.expand() == other.expand()
-                return False
-                
-            def __repr__(self):
-                return f"{ring}_Factorization({self.unit} " + " ".join([f"{f}^{p}" for f, p in self.powers.items()]) + ")"
-            
-            def expand(self):
-                return self.unit * ring.product([f ** p for f, p in self.powers.items()])
-            
-            def __mul__(self, other):
-                if (cls := type(self)) == type(other):
-                    unit = self.unit * other.unit
-                    powers = {f : p for f, p in self.powers.items()}
-                    for g, q in other.powers.items():
-                        for f in powers:
-                            if ring.are_associate(f, g):
-                                #we want to replace g^q with f^q
-                                #there will be a unit factor induced by this
-                                #the unit factor is (g/f)^q
-                                powers[f] += q
-                                unit *= (g / f) ** q
-                                break
-                        else:
-                            powers[g] = q
-                    return cls(unit, powers)
-                return NotImplemented
-        return Factorization
-
-    @classmethod
-    def Factorization(cls, *args, **kwargs):
-        return cls.FactorizationCls()(*args, **kwargs)
 
     def factor(self):
         raise NotImplementedError()
 
     def is_irreducible(self):
+        fp = self.factor().powers
+        if len(fp) == 1:
+            if fp[list(fp.keys())[0]] == 1:
+                return True
         return False
 
 
@@ -394,6 +418,11 @@ class EuclideanDomain(PrincipalIdealDomain):
                         g, coeffs = cls.xgcd_list([a, b, c])
                         x, y, z = coeffs
                         test.assertEqual(x * a + y * b + z * c, g)
+
+                        #does euclidean gcd/lcm agree with the gcd/lcm computed via counting irreducible powers
+                        if cls.can_factor():
+                            test.assertTrue(cls.are_associate(cls.gcd_list([a, b, c]), cls.Factorization.gcd([a.factor(), b.factor(), c.factor()]).expand()))
+                            test.assertTrue(cls.are_associate(cls.lcm_list([a, b, c]), cls.Factorization.lcm([a.factor(), b.factor(), c.factor()]).expand()))
 
     @classmethod
     def gcd(cls, x, y):
@@ -521,7 +550,7 @@ class EuclideanDomain(PrincipalIdealDomain):
         class QuotientRing(Ring):
             @classmethod
             def test_values(cls):
-                return [cls(x) for x in ring.test_values()]
+                return list(set(cls(x) for x in ring.test_values()))
 
             @classmethod
             def test_axioms(cls, test):
