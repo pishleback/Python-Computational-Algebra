@@ -239,11 +239,11 @@ class Poly():
             return ((B - A) * Frac(c, d) + A, (B - A) * Frac(c + h, d) + A)
 
         intervals = []
-        
         p = Poly.compose(poly, [A, B - A])
         if Poly.evaluate(p, 1) == 0:
             intervals.append((B, B))
-            
+
+        #find half open half closed isolating intervals using Collins and Akritas
         L = [(0, 0, p)]
         while len(L) != 0:
             c, k, q = L.pop()
@@ -260,11 +260,12 @@ class Poly():
                 L.append((2 * c, k + 1, q_small))
                 L.append((2 * c + 1, k + 1, Poly.compose(q_small, [1, 1])))
 
+        #shrink the intervals so that they are fully open
         open_intervals = []
         for a, b in intervals:
-            if a == b:
+            if a == b: #rational root
                 open_intervals.append((a, b))
-            else:
+            else: #algebraic root - shrink interval so that neither end point is a rational root
                 if Poly.evaluate(poly, a) == 0 or Poly.evaluate(poly, b) == 0:
                     orig_a = a
                     orig_b = b
