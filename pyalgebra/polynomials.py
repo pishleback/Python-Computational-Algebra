@@ -215,20 +215,25 @@ class Poly():
     @staticmethod
     def isolate_real_roots(poly, A, B):
         assert len(poly) != 0
+        #constant polynomial has no roots
         if len(poly) == 1:
             return ()
-        
+
+        #compute a bound M on the absolute value of any root
         if A is None or B is None:
-            M = 2 + Frac(max(abs(poly[i]) for i in range(len(poly) - 1)), poly[-1])
+            M = 2 + Frac(max(abs(poly[i]) for i in range(len(poly) - 1)), poly[-1]) #(Cauchy's bound + 1) https://captainblack.wordpress.com/2009/03/08/cauchys-upper-bound-for-the-roots-of-a-polynomial/
             if A is None:
                 A = -M
             if B is None:
                 B = M
         else:
             assert A < B
+
+        #there are not roots A < r < B if A >= B
         if A >= B:
             return ()
 
+        #now run Collins and Akritas algorithm %https://en.wikipedia.org/wiki/Real-root_isolation
         def interval(c, k, h):
             d = 2 ** k
             return ((B - A) * Frac(c, d) + A, (B - A) * Frac(c + h, d) + A)
