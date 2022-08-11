@@ -17,7 +17,7 @@ def add_mulbrac(string):
         return "(" + string + ")"
     else:
         return string
-
+    
 def cached_classmethod(func):
     @functools.cache
     def do_func(*args, **kwargs):
@@ -26,6 +26,7 @@ def cached_classmethod(func):
     def new_func(*args, **kwargs):
         return do_func(*args, **kwargs)
     return new_func
+
 
 class NumType(type):   
     def __init__(self, name, bases, dct):
@@ -42,6 +43,9 @@ class NumType(type):
             return super().__str__()
         else:
             return ans
+
+    def __getattr__(self, key):
+        raise AttributeError(key)
 
 class MathsSet(metaclass = NumType):
     @classmethod
@@ -492,7 +496,86 @@ class PrincipalIdealDomain(UniqueFactorizationDomain):
     pass
 
 
-class EuclideanDomain(PrincipalIdealDomain):
+
+class EuclideanDomainType(type(PrincipalIdealDomain)):
+    def __getattr__(cls, name):
+        #allow ring.FractionField in place of ring.FractionFieldCls()
+        if name == "FractionField":
+            return cls.FractionFieldCls()
+        return super().__getattr__(name)
+
+
+
+
+class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
+    @cached_classmethod
+    def FractionFieldCls(cls):
+        ring = cls
+        
+        class FractionField(Field):
+            @classmethod
+            def typestr(cls):
+                return f"FractionField({ring})"
+            
+            @classmethod
+            def test_values(cls):
+                ringvals = ring.test_values()
+                return list(set([cls(v, 2) for v in ringvals] + [cls(1, v) for v in ringvals if v != 0] + [cls.int(0) + cls.int(1)]))
+
+            @classmethod
+            def init_cls(cls):
+                super().init_cls()
+                cls.fraction_ring = ring
+
+            @classmethod
+            def convert(cls, x):
+                try:
+                    return super().convert(x)
+                except NotImplementedError:
+                    pass
+                if isinstance(x, ring):
+                    return cls(x, 1)
+                else:
+                    return cls.convert(ring.convert(x))
+                
+            @classmethod
+            def int(cls, n):
+                return cls(n, 1)
+            
+            def __init__(self, n, d):
+                n = ring.convert(n)
+                d = ring.convert(d)
+                g = ring.gcd(n, d)
+                self.n = n // g
+                self.d = d // g
+
+            def __str__(self):
+                if self.d == 1:
+                    return str(self.n)
+                return f"{self.n}/{self.d}"
+            def __repr__(self):
+                return f"{type(self)}({self.n}/{self.d})"
+
+            def hash(self):
+                return 0
+            def equal(self, other):
+                assert (cls := type(self)) == type(other)
+                return self.n * other.d == other.n * self.d
+            def add(self, other):
+                assert (cls := type(self)) == type(other)
+                return cls(self.n * other.d + other.n * self.d, self.d * other.d)
+            def neg(self):
+                return type(self)(-self.n, self.d)
+            def mul(self, other):
+                assert (cls := type(self)) == type(other)
+                return cls(self.n * other.n, self.d * other.d)
+            def recip(self):
+                if self.n == 0:
+                    raise ZeroDivisionError()
+                return type(self)(self.d, self.n)
+            
+        return FractionField
+
     @classmethod
     def test_axioms(cls, test):
         super().test_axioms(test)
@@ -698,7 +781,17 @@ class EuclideanDomain(PrincipalIdealDomain):
         return QuotientRing
 
 
+class NotFractionField(Exception):
+    pass
+
+
 class Field(EuclideanDomain):
+    @classmethod
+    def test_axioms(cls, test):
+        super().test_axioms(test)
+        if cls.is_fraction_field():
+            test.assertTrue(cls.fraction_ring.FractionField is cls)
+        
     @classmethod
     def convert(cls, x):
         try:
@@ -713,6 +806,18 @@ class Field(EuclideanDomain):
     @classmethod
     def can_factor(cls):
         return True
+
+    @classmethod
+    def is_fraction_field(cls):
+        if cls.fraction_ring is None:
+            return False
+        else:
+            return True
+
+    @classmethod
+    def init_cls(cls):
+        super().init_cls()
+        cls.fraction_ring = None
 
     #should implement either recip or exactdiv to get a field
     def exactdiv(self, other):
@@ -974,14 +1079,15 @@ class Gaussian(EuclideanDomain):
         return cls.Factorization(unit, powers)
 
 
-class QQ(Field):
+
+class PrimQQ(Field):
     @classmethod
     def typestr(cls):
         return "ℚ"
     
     @classmethod
     def test_values(cls):
-        return [QQ(0, 1), QQ(1, 1), QQ(1, 2), QQ(-2, 3), QQ(-3, 4), QQ(5, 7)]
+        return [cls(0, 1), cls(1, 1), cls(1, 2), cls(-2, 3), cls(-3, 4), cls(5, 7)]
 
     @classmethod
     def test_axioms(cls, test):

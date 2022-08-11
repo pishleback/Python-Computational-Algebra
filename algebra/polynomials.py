@@ -14,7 +14,7 @@ def PolyOver(ring, var = "λ"):
         @classmethod
         def test_values(cls):
             values = ring.test_values()
-            return [cls([7 * c, 2]) for c in values[:5]] + [cls([2, -1, 3 * c]) for c in values[:5]]
+            return [cls([7 * c, 2]) for c in values[:2]] + [cls([2, -1, 3 * c]) for c in values[:2]]
     
         @classmethod
         def typestr(cls):
@@ -133,6 +133,8 @@ def PolyOver(ring, var = "λ"):
         def __call__(self, obj):
             obj = ring.convert(obj)
             return type(obj).sum([c * obj ** p for p, c in enumerate(self.rep)])
+        def derivative(self):
+            return type(self)(i * self.rep[i] for i in range(1, len(self.rep)))
 
 
     if issubclass(ring, base.IntegralDomain):
@@ -164,8 +166,22 @@ def PolyOver(ring, var = "λ"):
     if issubclass(ring, base.UniqueFactorizationDomain):
         class Poly(Poly, base.UniqueFactorizationDomain):
             @classmethod
+            def test_axioms(cls, test):
+                super().test_axioms(test)
+                for f in cls.test_values():
+                    m, p = f.factor_primitive()
+                    test.assertEqual(m * p, f)
+                        
+            @classmethod
             def can_factor(cls):
+                if issubclass(ring, base.Field):
+                    if ring.is_fraction_field():
+                        return PolyOver(ring.fraction_ring).can_factor()
                 return ring.can_factor() and ring.has_finite_units()
+
+            def factor_primitive(self):
+                m = ring.gcd_list(self.rep)
+                return m, self / m
             
             def factor(self):
                 import sympy
@@ -185,13 +201,18 @@ def PolyOver(ring, var = "λ"):
                 #kronekers method over general UFDs
                 #need to add squarefree factorization to speed this up
                 #also finding rational roots
-                m = ring.gcd_list(self.rep)
-                f = self / m
 
-                def factor_primitive_kronekers(f):                    
+                print(self)
+                
+                m, f = self.factor_primitive()
+
+                def factor_primitive_kronekers(f):
                     assert f.degree() != 0
                     if f.degree() == 1:
                         return type(self).Factorization(type(self).int(1), {f : 1})
+
+##                    g = f.sqfree_part()
+##                    print(f, g)
                     
                     def possible_factors(f):
                         #we are reduced to factoring m in ring and f in cls
@@ -256,9 +277,58 @@ def PolyOver(ring, var = "λ"):
 
     if issubclass(ring, base.Field):
         class Poly(Poly, base.EuclideanDomain):
+            @classmethod
+            def test_axioms(cls, test):
+                super().test_axioms(test)
+                if ring.is_fraction_field(): 
+                    for f in cls.test_values():
+                        m, p = f.factor_primitive_field()
+                        test.assertEqual(cls.convert(m) * cls.convert(p), f)
+
+            @classmethod
+            def convert(cls, x):
+                try:
+                    return super().convert(x)
+                except NotImplementedError:
+                    pass
+                if ring.is_fraction_field():
+                    PolyOverRing = PolyOver(ring.fraction_ring)
+                    if isinstance(x, PolyOverRing):
+                        return cls([ring.convert(c) for c in x.rep])
+                return cls.convert(ring.convert(x))
+
             def norm(self):
                 return self.degree()
             #divmod is defined over an integral domain
+
+            @classmethod
+            def can_factor(cls):
+                if ring.is_fraction_field():
+                    return PolyOver(ring.fraction_ring).can_factor()
+                return super().can_factor()
+
+            #note the difference with factor_primitive
+            #here the primitive part is a polynomial over the base ring of the fractions
+            def factor_primitive_field(self):
+                if ring.is_fraction_field():
+                    PolyOverRing = PolyOver(ring.fraction_ring)
+                    d = ring.fraction_ring.lcm_list([c.d for c in self.rep])
+                    prim = self * d #over the field
+                    prim = PolyOverRing(c.n / c.d for c in prim.rep) #over the base ring
+                    n, prim = prim.factor_primitive() #factor_primitive over base ring
+                    return ring(n, d), prim
+                raise Exception("Can't factor_primitive_field over a field which is not a field of fractions")
+
+            def factor(self):
+                if ring.is_fraction_field():
+                    PolyOverRing = PolyOver(ring.fraction_ring)                    
+                    m, prim = self.factor_primitive_field()
+                    prim_factored = prim.factor()
+                    return type(self).Factorization(type(self).convert(prim_factored.unit) * type(self).convert(m), {type(self).convert(irr) : p for irr, p in prim_factored.powers.items()})                    
+                raise NotImplementedError()
+
+            def sqfree_part(self):
+                return self // type(self).gcd(self, self.derivative())
 
     return Poly
 
@@ -275,19 +345,6 @@ if False:
     @functools.cache
     def PolyOver(ring):
         class Poly(PolyType, basic.Euclidean):
-            @classmethod
-            def lagrange_interp(cls, points):
-                points = tuple((cls.convert(inp), cls.convert(out)) for inp, out in points)
-                n = len(points)
-                return cls.sum([cls.convert(points[i][1]) * cls.ring.product([points[i][0] - points[j][0] for j in range(n) if j != i]).recip() * cls.product([cls.var() - points[j][0] for j in range(n) if j != i]) for i in range(n)])
-
-            @classmethod
-            def lagrange_interp_mult(cls, points):
-                #lagrange interp scaled by a constant so that coefficients are in the same base ring
-                points = tuple((cls.convert(inp), cls.convert(out)) for inp, out in points)
-                n = len(points)
-                return cls.sum([cls.convert(points[i][1]) * cls.ring.product([cls.ring.product([points[k][0] - points[j][0] for j in range(n) if j != k]) for k in range(n) if k != i]) * cls.product([cls.var() - points[j][0] for j in range(n) if j != i]) for i in range(n)])
-
             @basic.cached_classmethod
             def cyclotomic(cls, n):
                 if ring is basic.ZZ:
@@ -296,13 +353,6 @@ if False:
                     return (cls.var() ** n.rep - 1) // (cls.product(cls.cyclotomic(d) for d in n.divisors() if d != n))
                 else:
                     return cls([int(x) for x in PolyOver(basic.ZZ).cyclotomic(n)])
-
-            #put leading term into standard associate form
-            def assoc_recip(self):
-                if self == 0:
-                    raise ZeroDivisionError()
-                else:
-                    return self.rep[-1].assoc_recip()
                 
             def roots(self):
                 #return all roots in the base ring
@@ -316,50 +366,6 @@ if False:
                                 rs.append(-a / b)
                 return rs
 
-            #euclidean stuff
-            def norm(self):
-                return self.degree()
-            def divmod(self, other):
-                assert (cls := type(self)) == type(other)
-                assert other != 0
-                quo = cls([])
-                rem = self
-                while rem.degree() - other.degree() >= 0 and rem != 0:
-                    new_quo = cls([ring.int(0)] * (rem.degree() - other.degree()) + [rem[rem.degree()] / other[other.degree()]])
-                    rem = rem - new_quo * other
-                    quo = quo + new_quo
-                return quo, rem
-            def div(self, other):
-                assert (cls := type(self)) == type(other)
-                return self.divmod(other)[0]
-            def mod(self, other):
-                assert (cls := type(self)) == type(other)
-                return self.divmod(other)[1]
-            def truediv(self, other):
-                ans = self.div(other)
-                if ans * other == self:
-                    return ans
-                else:
-                    raise basic.NotDivisibleError()
-            def __divmod__(self, other):
-                try:
-                    other = type(self).convert(other)
-                except NotImplementedError:
-                    return NotImplemented
-                else:
-                    return self.divmod(other)
-
-            #polynomial stuff
-            def degree(self):
-                #zero polynomial -> degree -1
-                return len(self.rep) - 1
-            def __call__(self, obj):
-                #function evaluation
-                if type(obj) == int:
-                    return self(ring.int(obj))
-                if self == 0:
-                    return ring.int(0) * obj
-                return type(obj).sum([c * obj ** p for p, c in enumerate(self.rep)])
 
             def monic(self):
                 return self * self[self.degree()].recip()
