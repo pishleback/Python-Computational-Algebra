@@ -845,6 +845,66 @@ class Field(EuclideanDomain):
 
 
 
+
+#should be inherited alongside a NumType
+@functools.total_ordering
+class Real():
+    def __int__(self):
+        raise NotImplementedError(f"__int__ not implemented for {type(self)}")
+    def __float__(self):
+        raise NotImplementedError(f"__float__ not implemented for {type(self)}")
+    def __complex__(self):
+        return complex(float(self), 0)
+    def __lt__(self, other):
+        try:
+            other = type(self).convert(other)
+        except NotImplementedError:
+            pass
+        else:
+            return self.lt(other)
+        return NotImplemented
+    def __abs__(self):
+        return self * self.sign()
+
+    def lt(self, other):
+        assert (cls := type(self)) == type(other)
+        raise NotImplementedError(f"lt not implemented for {cls}")
+
+    def sign(self):
+        if self == 0:
+            return 0
+        elif self > 0:
+            return 1
+        else:
+            return -1
+
+    #cf stuff
+    def floor(self):
+        raise NotImplementedError(f"floor not implemented for {type(self)}")
+    def continued_fraction(self):
+        a0 = self.floor()
+        self = (self - type(self).int(a0)).recip()
+        a1 = self.floor()
+        self = (self - type(self).int(a1)).recip()
+
+        pa, pb = a0, a0 * a1 + 1
+        qa, qb = 1, a1
+
+        yield a0, pa, qa
+        yield a1, pb, qb
+        
+        while True:
+            an = self.floor()
+            pa, pb = pb, an * pb + pa
+            qa, qb = qb, an * qb + qa
+            yield an, pb, qb
+            self = (self - type(self).int(an)).recip()
+
+
+
+
+
+
 class ZZ(EuclideanDomain):
     @classmethod
     def typestr(cls):
@@ -886,6 +946,9 @@ class ZZ(EuclideanDomain):
         return str(self.rep)
     def __repr__(self):
         return f"{type(self).typestr()}{repr(self.rep)}"
+
+    def __int__(self):
+        return self.rep
 
     def hash(self):
         return hash(self.rep)

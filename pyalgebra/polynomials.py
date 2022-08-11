@@ -621,6 +621,10 @@ def isolate_real_roots(p, A, B):
         assert A < B
     return Poly.isolate_real_roots(p, A, B)
 
+def count_real_roots(p, A = None, B = None):
+    Poly.validate(p)
+    return len(isolate_real_roots(p, A, B))
+
 @lambda f : lambda p, a, b, c, d : f(psqft(p), a, b, c, d)
 @functools.lru_cache()
 def count_complex_roots(p, a, b, c, d):

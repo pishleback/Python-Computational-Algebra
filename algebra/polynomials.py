@@ -131,8 +131,12 @@ def PolyOver(ring, var = "λ"):
             else:
                 return len(self.rep) - 1
         def __call__(self, obj):
-            obj = ring.convert(obj)
-            return type(obj).sum([c * obj ** p for p, c in enumerate(self.rep)])
+            ans = self.rep[0]
+            obj_pow = obj
+            for c in self.rep[1:]:
+                ans += c * obj_pow
+                obj_pow *= obj
+            return ans
         def derivative(self):
             return type(self)(i * self.rep[i] for i in range(1, len(self.rep)))
 

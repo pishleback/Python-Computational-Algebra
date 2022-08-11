@@ -6,8 +6,28 @@ import pyalgebra
 
 def test2():
     from fractions import Fraction as Frac
-    pyalgebra.polynomials.test()
     
+    ZZ = algebra.base.ZZ
+    QQ = algebra.base.ZZ.FractionField
+    PolyZZ = algebra.polynomials.PolyOver(ZZ)
+    PolyQQ = algebra.polynomials.PolyOver(QQ)
+
+    x = PolyZZ.var()
+    a = algebra.algebraic._RealRep(x ** 5 - x - 1, Frac(1, 1), Frac(2, 1))
+    b = algebra.algebraic._RealRep(x ** 3 - x - 1, Frac(1, 1), Frac(2, 1))
+    c = algebra.algebraic._RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(-2, 1), Frac(-1, 1))
+    d = algebra.algebraic._RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(-1, 1), Frac(0, 1))
+    e = algebra.algebraic._RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(0, 1), Frac(1, 1))
+    f = algebra.algebraic._RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(1, 1), Frac(2, 1))
+
+    h = Frac(10, 1)
+    i = Frac(-9, 5)
+
+    print(a, b, a * b)
+    print(c, d, c * d)
+    print(e, f, e * f)
+##    print(a, h, a * h)
+
     
 
 def test1():
