@@ -1,5 +1,6 @@
 import functools
 from algebra import base
+from algebra import polynomials
 import itertools
 
 #===SUMMARY===
@@ -328,6 +329,9 @@ def MatrixOver(ring):
                 if r >= H.rows or c >= H.cols:
                     assert U * self == H
                     return U, det_U, tuple(pivots), H
+
+        def hermite_normal_form(self):
+            return self.hermite_algorithm()[3]
         
         def inverse(self):
             assert (n := self.rows) == self.cols
@@ -470,6 +474,17 @@ def MatrixOver(ring):
             sol = sol.minor(row = self.cols)
             assert self * sol == vec
             return sol
+
+        def char_mat(self):
+            assert (n := self.rows) == self.cols
+            polyring = polynomials.PolyOver(ring)
+            Pmat = MatrixOver(polyring)
+            pself = Pmat(self.rows, self.cols, [[polyring.convert(self[r, c]) for c in range(self.cols)] for r in range(self.rows)])
+            return pself - polyring.var() * Pmat.eye(n)
+        def min_poly(self):
+            return self.char_mat().smith_diagonal()[-1]
+        def char_poly(self):
+            return polynomials.PolyOver(ring).product(self.char_mat().smith_diagonal())
             
     return Matrix
     
@@ -587,272 +602,6 @@ def SpanOver(ring):
             return type(self)(self.cols, self.rows, [mat.transpose() for mat in self.basis])
 
     return Span
-
-
-
-
-
-
-
-
-if False:
-    #old stuff
-    @functools.cache
-    def AllOver(ring):
-        assert issubclass(ring, basic.Ring)
-        
-        class Matrix(basic.Ring):
-            def char_mat(self):
-                assert (n := self.rows) == self.cols
-                polyring = polynomials.PolyOver(ring)
-                Pmat = MatrixOver(polyring)
-                pself = Pmat([[polyring.convert(self[r, c]) for c in range(self.cols)] for r in range(self.rows)])
-                return pself - polyring.var() * Pmat.eye(n)
-            def min_poly(self):
-                return self.char_mat().smith_diagonal()[-1]
-            def char_poly(self):
-                return polynomials.PolyOver(ring).product(self.char_mat().smith_diagonal())
-
-            def row_span(self):
-                return SpanOver(ring)(1, self.cols, [self.row(r) for r in range(self.rows)])
-            def col_span(self):
-                return SpanOver(ring)(self.rows, 1, [self.col(c) for c in range(self.cols)])
-            def row_kernel(self):
-                U, _, pivs, H = self.hermite_algorithm()
-                return SpanOver(ring)(1, self.rows, [U.row(r) for r in range(len(pivs), self.rows)])
-            def col_kernel(self):
-                return self.transpose().row_kernel().transpose()
-
-            def row_sol_sp(self, a):
-                return self.transpose().col_sol_sp(a.transpose()).transpose()
-            def col_sol_sp(self, a):
-                assert a.cols == 1
-                assert (rows := self.rows) == a.rows
-                sp = type(self).eye(self.cols).col_span().as_offsetspan()
-                for r in range(rows):
-                    row = self.row(r)
-                    g, coeffs = ring.xgcd_list([row[0, i] for i in range(self.cols)])
-                    if g == 0 and a[r, 0] != 0:
-                        return OffsetSpanOver(ring).empty(self.cols, 1)
-                    elif g == 0:
-                        pass
-                    elif a[r, 0] % g == 0:
-                        mult = a[r, 0] // g
-                        sp &= type(self)([[mult * elem] for elem in coeffs]) + row.col_kernel()
-                    else:
-                        return OffsetSpanOver(ring).empty(self.cols, 1)
-                return sp
-
-            def col_unique_sol(self, a):
-                sol_sp = self.col_sol_sp(a)
-                offset, span = sol_sp.offset_span()
-                assert span.dimention() == 0
-                return offset
-
-    ##        def fractional_row_sol_sp(self, a):
-    ##            raise NotImplementedError()
-    ##        def fractional_col_sol_sp(self, a):
-    ##            assert issubclass(ring, basic.FieldOfFractions)
-    ##            assert type(self) == type(a)
-    ##            assert a.rows == self.rows
-    ##            assert a.cols == 1
-    ##            m1, selfp = self.primitive()
-    ##            m2, ap = a.primitive()
-    ##            m = ring.ring.lcm(m1, m2)
-    ##            selfp = selfp * (m // m1)
-    ##            ap = ap * (m // m2)            
-    ##            sols_p = selfp.col_sol_sp(ap)
-    ##            return m, sols_p
-    ##
-
-            def primitive(self):
-                if issubclass(ring, basic.FieldOfFractions):
-                    elems = [self[r, c] for r, c in itertools.product(range(self.rows), range(self.cols))]
-                    m = ring.ring.lcm_list([elem.d for elem in elems])
-                    return m, MatrixOver(ring.ring)([[(m * self[r, c]).to_ring() for c in range(self.cols)] for r in range(self.rows)])
-                else:
-                    raise Exception("Can only decompose into multiple and primitive matrix over a field of fractions")
-
-            def convert_to(self, newring):
-                return MatrixOver(newring)([[self[r, c] for c in range(self.cols)] for r in range(self.rows)])
-
-
-
-
-
-
-
-
-        def mat_to_row(rows, cols, mat):
-            assert mat.rows == rows
-            assert mat.cols == cols
-            return MatrixOver(ring)([[mat[i % rows, i // rows] for i in range(cols * rows)]])
-
-        def row_to_mat(rows, cols, row_mat):
-            assert row_mat.cols == rows * cols
-            assert row_mat.rows == 1
-            return MatrixOver(ring)([[row_mat[0, r + c * rows] for c in range(cols)] for r in range(rows)])
-
-        def projectivize(rows, cols, div, mat):
-            row = mat_to_row(rows, cols, mat)
-            hom = MatrixOver(ring).join_cols([MatrixOver(ring)([[div]]), row])
-            return hom
-
-        def deprojectivize(rows, cols, mat):
-            row = mat_to_row(rows, cols, mat)
-            return row.minor(col = 0), row[0, 0]
-
-
-
-
-        class OffsetSpan():
-            class EmptyError(Exception):
-                pass
-            
-            @classmethod
-            def empty(cls, rows, cols):
-                return cls(rows, cols, SpanOver(ring)(1, rows * cols + 1, []))
-                
-            def __init__(self, rows, cols, proj_span):
-                assert isinstance(proj_span, SpanOver(ring))
-                assert proj_span.rows == 1
-                assert proj_span.cols == rows * cols + 1
-                self.rows = rows
-                self.cols = cols
-                self.n = rows * cols + 1
-                
-                self.proj_span = proj_span
-
-            def __str__(self):
-                if self.is_empty():
-                    return "EMPTY"
-                else:
-                    offset, span = self.offset_span()
-                    
-                    if span.dimention() == 0:
-                        return str(offset) + " + <>"
-
-                    offset_lines = str(offset).split("\n")
-                    span_lines = str(span).split("\n")
-
-                    return "\n".join([offset_lines[i] + (" + < " if i == len(offset_lines) - 1 else "     ") + span_lines[i] + (" >" if i == len(offset_lines) - 1 else "  ") for i in range(len(offset_lines))])                
-                
-            def __add__(self, other):
-                if (cls := type(self)) == type(other):
-                    if (rows := self.rows) == other.rows and (cols := self.cols) == other.cols:
-                        raise Exception("im not so sure that this should be implemented")
-                        return cls(rows, cols, self.proj_span + other.proj_span)
-                elif type(other) == MatrixOver(ring):
-                    if (rows := self.rows) == other.rows and (cols := self.cols) == other.cols:
-                        return cls(rows, cols, SpanOver(ring)(1, self.n, [mat + mat[0, 0] * projectivize(self.rows, self.cols, 0, other) for mat in self.proj_span.basis]))
-                return NotImplemented
-            def __radd__(self, other):
-                if type(other) == MatrixOver(ring):
-                    return self + other
-                return NotImplemented
-            def __sub__(self, other):
-                if type(other) == MatrixOver(ring):
-                    return self + (-other)
-                return NotImplemented
-
-            def __mul__(self, other):
-                if type(other) == MatrixOver(ring):
-                    if other.rows == self.cols and self.rows == 1:
-                        hom_other = MatrixOver(ring).join_diag([MatrixOver(ring).eye(1), other])
-                        return type(self)(other.rows, self.cols, type(self.proj_span)(1, other.rows * self.cols + 1, [hom * hom_other for hom in self.proj_span.basis]))
-                    else:
-                        raise Exception("Dimentions don't match for ProjSpan * Mat")
-                return NotImplemented
-            def __rmul__(self, other):
-                if type(other) == MatrixOver(ring):
-                    if other.cols == self.rows and self.cols == 1:
-                        hom_other = MatrixOver(ring).join_diag([MatrixOver(ring).eye(1), other])
-                        return type(self)(other.rows, self.cols, type(self.proj_span)(1, other.rows * self.cols + 1, [(hom_other * hom.transpose()).transpose() for hom in self.proj_span.basis]))
-                    else:
-                        raise Exception("Dimentions don't match for Mat * ProjSpan")
-                return NotImplemented
-
-            def __and__(self, other):
-                if (cls := type(self)) == type(other):
-                    if (rows := self.rows) == other.rows and (cols := self.cols) == other.cols:
-                        return cls(rows, cols, self.proj_span & other.proj_span)
-                return NotImplemented
-
-            #decompose into an offset and a span
-            def offset_span(self):
-                m = len(self.proj_span.basis)
-                if m == 0:
-                    raise self.EmptyError("VERY EMPTY")
-                
-                metamat = MatrixOver(ring).join_rows(self.proj_span.basis)
-                metamat = metamat.hermite_normal_form()
-                assert metamat.cols == self.n
-                assert metamat.rows == m
-
-                if metamat[0, 0] == 0:
-                    raise self.EmptyError("EMPTY")
-                else:
-                    g = metamat[0, 0]
-                    if g == 1:
-                        for i in range(1, m):
-                            assert metamat[i, 0] == 0
-
-                        offset = row_to_mat(self.rows, self.cols, metamat.row(0).minor(col = 0))
-                        span = SpanOver(ring)(self.rows, self.cols, [row_to_mat(self.rows, self.cols, metamat.row(i).minor(col = 0)) for i in range(1, m)])
-
-                        return offset, span
-                    else:
-                        raise self.EmptyError("KINDA EMPTY")
-
-            def is_empty(self):
-                try:
-                    self.offset_span()
-                except self.EmptyError:
-                    return True
-                else:
-                    return False
-
-            def transpose(self):
-                return type(new_self_ex)(self.cols, self.rows, SpanOver(ring)(1, self.n, [MatrixOver(ring).join_cols([mat_to_row(self.cols, self.rows, row_to_mat(self.rows, self.cols, hom.minor(col = self.n - 1)).transpose()), MatrixOver(ring)([[hom[0, self.n - 1]]])]) for hom in self.proj_span.basis]))
-            
-
-        return Matrix, Span, OffsetSpan
-
-
-
-    def MatrixOver(ring):
-        return AllOver(ring)[0]
-    def SpanOver(ring):
-        return AllOver(ring)[1]
-    def OffsetSpanOver(ring):
-        return AllOver(ring)[2]
-
-
-
-
-
-
-
-    def QQ_possible_orders(n):
-        import pyalgebra
-        #yield all possible (finite) orders of nxn matrixies over QQ
-
-        #partition n
-        #take all possible phi inverse of the partition
-        #take lcm of the phi inverse partition
-        #yield that value
-
-        found = set([])
-        for part in pyalgebra.combinatorics.int_partitions(n):
-            for phi_inv in itertools.product(*[tuple(pyalgebra.numtheory.phi_inverse(k)) for k in part]):
-                x = pyalgebra.numtheory.lcm_list(phi_inv)
-                if not x in found:
-                    found.add(x)
-                    yield x
-
-        
-
-
 
 
 

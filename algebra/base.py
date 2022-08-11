@@ -520,7 +520,7 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
             @classmethod
             def test_values(cls):
                 ringvals = ring.test_values()
-                return list(set([cls(v, 2) for v in ringvals] + [cls(1, v) for v in ringvals if v != 0] + [cls.int(0) + cls.int(1)]))
+                return list(set([cls(v, 2) for v in ringvals[3:]] + [cls(1, v) for v in ringvals[3:6] if v != 0] + [cls.int(0) + cls.int(1)]))
 
             @classmethod
             def init_cls(cls):

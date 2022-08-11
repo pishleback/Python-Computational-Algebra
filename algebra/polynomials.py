@@ -185,18 +185,18 @@ def PolyOver(ring, var = "λ"):
             
             def factor(self):
                 import sympy
-##                if ring == base.ZZ:
-##                    x = sympy.symbols("x")
-##                    s_poly = sum((x ** p * sympy.Integer(c.rep) for p, c in enumerate(self.rep)), sympy.Integer(0))
-##                    s_poly = sympy.poly(s_poly, x, domain = sympy.ZZ)
-##                    mult, factors = s_poly.factor_list()
-##                    mult = ring(int(mult))
-##                    mult = mult.factor()
-##                    mult = type(self).Factorization(self.convert(mult.unit), {self.convert(f) : p for f, p in mult.powers.items()})
-##                    
-##                    factors = {type(self)(tuple(reversed(tuple(ring(int(coeff)) for coeff in poly.all_coeffs())))) : power for poly, power in factors}
-##                    factors = type(self).Factorization(1, factors)
-##                    return mult * factors
+                if ring == base.ZZ:
+                    x = sympy.symbols("x")
+                    s_poly = sum((x ** p * sympy.Integer(c.rep) for p, c in enumerate(self.rep)), sympy.Integer(0))
+                    s_poly = sympy.poly(s_poly, x, domain = sympy.ZZ)
+                    mult, factors = s_poly.factor_list()
+                    mult = ring(int(mult))
+                    mult = mult.factor()
+                    mult = type(self).Factorization(self.convert(mult.unit), {self.convert(f) : p for f, p in mult.powers.items()})
+                    
+                    factors = {type(self)(tuple(reversed(tuple(ring(int(coeff)) for coeff in poly.all_coeffs())))) : power for poly, power in factors}
+                    factors = type(self).Factorization(1, factors)
+                    return mult * factors
 
                 #kronekers method over general UFDs
                 #need to add squarefree factorization to speed this up
