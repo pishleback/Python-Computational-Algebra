@@ -5,6 +5,8 @@ import pyalgebra
 
 
 def test2():
+##    pyalgebra.polynomials.test()
+    
     from fractions import Fraction as Frac
     
     ZZ = algebra.base.ZZ
@@ -13,6 +15,10 @@ def test2():
     PolyQQ = algebra.polynomials.PolyOver(QQ)
 
     x = PolyZZ.var()
+
+##    a = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(-1, 1), Frac(0, 1))
+##    b = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(2, 1), Frac(3, 1))
+    
     a = algebra.algebraic._RealRep(x ** 5 - x - 1, Frac(1, 1), Frac(2, 1))
     b = algebra.algebraic._RealRep(x ** 3 - x - 1, Frac(1, 1), Frac(2, 1))
     c = algebra.algebraic._RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(-2, 1), Frac(-1, 1))
@@ -26,7 +32,7 @@ def test2():
     print(a, b, a * b)
     print(c, d, c * d)
     print(e, f, e * f)
-##    print(a, h, a * h)
+    print(a, h, a * h)
 
     
 

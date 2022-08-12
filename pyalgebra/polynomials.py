@@ -212,8 +212,14 @@ class Poly():
     #return (a, b, p) where:
     #p is a polynomial with exactly one squarefree root between a and b
     #poly should be squarefree for this to work correctly
+    #finds all real roots in the closed interval [A, B]
     @staticmethod
     def isolate_real_roots(poly, A, B):
+        if type(A) == int:
+            A = Frac(A, 1)
+        if type(B) == int:
+            B = Frac(B, 1)
+            
         assert len(poly) != 0
         #constant polynomial has no roots
         if len(poly) == 1:
@@ -281,13 +287,7 @@ class Poly():
                         a = Frac(a + orig_a, 2)
                         b = Frac(b + orig_b, 2)
                 open_intervals.append((a, b))
-        return tuple(open_intervals)
-
-    @staticmethod
-    @lambda f : lambda p, A = None, B = None : f(tuple(Poly.primitive(Poly.sqfree(p))), A, B)
-    @functools.lru_cache()
-    def real_roots(poly, A, B):
-        return [RealRoot(a, b, poly) for a, b in Poly.isolate_real_roots(poly, A, B)]
+        return tuple(open_intervals)    
 
     @staticmethod
     def count_complex_roots(poly, a, b, c, d):
@@ -311,7 +311,7 @@ class Poly():
         def crossings(re, im, s, t):
             assert len(re) != 0 or len(im) != 0 #otherwise theres a line of infinite zeros which is not possible
             if len(re) == 0:
-                roots_im = Poly.real_roots(im, s, t)
+                roots_im = real_roots(im, s, t)
                 if len(roots_im) == 0:
                     if Poly.evaluate(im, Frac(s + t, 2)) > 0:
                         return [1]
@@ -320,7 +320,7 @@ class Poly():
                 else:
                     raise BoundaryRoot("Edge Root (const)")
             elif len(im) == 0:
-                roots_re = Poly.real_roots(re, s, t)
+                roots_re = real_roots(re, s, t)
                 if len(roots_re) == 0:
                     if Poly.evaluate(re, Frac(s + t, 2)) > 0:
                         return [0]
@@ -329,8 +329,8 @@ class Poly():
                 else:
                     raise BoundaryRoot("Edge Root (const)")
             else:
-                roots_re = Poly.real_roots(re, s, t)
-                roots_im = Poly.real_roots(im, s, t)
+                roots_re = real_roots(re, s, t)
+                roots_im = real_roots(im, s, t)
                 for x, y in itertools.product(roots_re, roots_im):
                     if x == y:
                         raise BoundaryRoot("Edge Root")
@@ -338,7 +338,7 @@ class Poly():
 
                 def sign_at(poly, root):
                     at_a = Poly.evaluate(poly, root.a)
-                    at_b = Poly.evaluate(poly, root.b)        
+                    at_b = Poly.evaluate(poly, root.b)
                     assert at_a != 0 and at_b != 0
                     sign_a = at_a > 0
                     sign_b = at_b > 0
@@ -347,6 +347,10 @@ class Poly():
                     elif not sign_a and not sign_b:
                         return False
                     else:
+                        #because the real and imaginary roots have been seperated
+                        #for example, the interval around each real root contains no root of the imaginary part
+                        #thus the sign of the imaginary part evaluated at the location of the real root is constant
+                        #thus the sign is equal to the sign at either end point
                         assert False
 
                 roots = [(x, sign_at(im, x), False) for x in roots_re] + [(x, sign_at(re, x), True) for x in roots_im]
@@ -490,7 +494,7 @@ class Poly():
         
             
 
-
+#represents both rational and real algebraic numbers
 @functools.total_ordering
 class RealRoot():
     @staticmethod
@@ -547,7 +551,7 @@ class RealRoot():
                 if (Poly.evaluate(p, other.a) < 0) == (Poly.evaluate(p, other.b) <= 0):
                     return False
 
-                roots = Poly.real_roots(p)
+                roots = real_roots(p)
 
                 for x, y in itertools.combinations(roots, 2):
                     RealRoot.separate(x, y)
@@ -627,10 +631,23 @@ def isolate_real_roots(p, A, B):
         assert A < B
     return Poly.isolate_real_roots(p, A, B)
 
+#count real roots in the closed interval [A, B]
 def count_real_roots(p, A = None, B = None):
     Poly.validate(p)
     return len(isolate_real_roots(p, A, B))
 
+#isolated real roots. Allows for refinement and ordering
+@lambda f : lambda p, A = None, B = None : f(tuple(Poly.primitive(Poly.sqfree(p))), A, B)
+@functools.lru_cache()
+def real_roots(poly, A, B):
+    return [RealRoot(a, b, poly) for a, b in Poly.isolate_real_roots(poly, A, B)]
+
+def rational_real_root(x):
+    assert type(x) == Frac
+    return RealRoot(x, x, [-x, 1])
+    
+#count complex roots strictly within the box
+#if a root lies on the boundary then BoundaryRoot is raised
 @lambda f : lambda p, a, b, c, d : f(psqft(p), a, b, c, d)
 @functools.lru_cache()
 def count_complex_roots(p, a, b, c, d):
@@ -667,11 +684,17 @@ def test():
         x = sympy.symbols("x")
         p = p(x)
         p = sympy.Poly(p, gens = x, domain = "QQ")
-        p = [Frac(int(x.numerator()), int(x.denominator())) for x in reversed(list(p.all_coeffs()))]
+        p = [Frac(x.p, x.q) for x in reversed(list(p.all_coeffs()))]
+        #p = [Frac(int(x.numerator), int(x.denominator)) for x in reversed(list(p.all_coeffs()))]
         return p
-    p = symbol_poly(lambda x : x ** 5 - x + 1)
-    p = symbol_poly(lambda x : 61 - 273 * x + 305 * x ** 2 + x ** 3) #reeeeeeeally close roots on this one
-    p = symbol_poly(lambda x : x ** 12 - 3 * x ** 5 + 6 * x ** 2 - x + 1)
+##    p = symbol_poly(lambda x : x ** 5 - x + 1)
+##    p = symbol_poly(lambda x : 61 - 273 * x + 305 * x ** 2 + x ** 3) #reeeeeeeally close roots on this one
+##    p = symbol_poly(lambda x : x ** 12 - 3 * x ** 5 + 6 * x ** 2 - x + 1)
+##    p = symbol_poly(lambda x : x ** 12 - x ** 11 - 2)
+    import random
+    p = symbol_poly(lambda x : sum(random.randint(0, 1) * x ** k for k in range(10)))
+##    p = symbol_poly(lambda x : (x + x ** 2) ** 10 - 1)
+    p = symbol_poly(lambda x : x ** 2 - 1)    
 
     print(p, len(p))
     
@@ -687,6 +710,7 @@ def test():
     for a, b, c, d in isolate_uhp_roots(p):
         print(a, b, c, d)
 
+    #boxes for imaginary roots and intervals for real roots
     def gen_boxes(p):
         yield from isolate_imag_roots(p)
         for a, b in isolate_real_roots(p):
@@ -694,6 +718,10 @@ def test():
                 yield (a-0.01, b+0.01, -0.02, 0.02)
             else:
                 yield (a, b, -0.01, 0.01)
+
+    #boxes for all roots
+    def gen_boxes(p):
+        yield from isolate_complex_roots(p)
             
     complex_poly_view.run(p, list(gen_boxes(p)))
 

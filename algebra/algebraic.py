@@ -22,7 +22,6 @@ def sympy_to_poly(poly, x):
     assert poly.gen == x
     return PolyZZ([int(c) for c in reversed(poly.all_coeffs())])
     
-    
 def root_sum_poly(p, q):
     x, z = sympy.symbols("x, z")
     p = poly_to_sympy(p, x)
@@ -40,6 +39,8 @@ def root_prod_poly(p, q):
     prod_poly = sympy.Poly(sympy.resultant(p, r), x, domain = "ZZ").sqf_part()
     return sympy_to_poly(prod_poly, x)
 
+
+
 def eval_at_frac(poly, x):
     assert isinstance(poly, PolyZZ)
     assert type(x) == Frac
@@ -51,12 +52,37 @@ def eval_at_frac(poly, x):
         x_pow *= x
     return ans
 
-
-
 #the idea now is to define standalone classes _RealRep and _ComplexRep representing algebraic numbers
 #then define a class called Algebraic which uses an instance of either Frac, _RealRep, or _ComplexRep as its representative
 
+class NoUniqueRoot(Exception):
+    pass
+
 class _RealRep():
+    @classmethod
+    def unique_root(cls, poly, a, b):
+        ra = pyalgebra.polynomials.rational_real_root(a)
+        rb = pyalgebra.polynomials.rational_real_root(b)
+        polys = list(poly.factor().powers.keys())
+        roots = [pyalgebra.polynomials.real_roots([int(c) for c in poly.rep], a, b) for poly in polys]
+        prs = list(zip(polys, roots))
+        prs = [(poly, [r for r in roots if ra < r < rb]) for poly, roots in prs] #delete roots which lie outside the search range
+        prs = [(poly, roots) for poly, roots in prs if len(roots) != 0] #delete polynomials with no possible roots
+        if len(prs) == 0:
+            raise Exception() #if there are _no_ roots then something has gone really wrong
+        #if there is a unique root in the range, return it
+        if len(prs) == 1:
+            poly, roots = prs[0]
+            if len(roots) == 1:
+                root = roots[0]
+                assert (rat := (root.a == root.b)) == (poly.degree() == 1)
+                if rat:
+                    assert type(root.a) == Frac
+                    return root.a
+                else:
+                    return cls(poly, root.a, root.b)
+        raise NoUniqueRoot()
+    
     def __init__(self, poly, a, b):
         assert isinstance(poly, PolyZZ)
         assert poly.degree() >= 2
@@ -83,71 +109,56 @@ class _RealRep():
     
     def __add__(self, other):
         if type(other) == _RealRep:
-            polys = list(root_sum_poly(self.poly, other.poly).factor().powers.keys())
+            poly = root_sum_poly(self.poly, other.poly)
             while True:
-                counts = [pyalgebra.polynomials.count_real_roots([int(c) for c in poly.rep], self.a + other.a, self.b + other.b) for poly in polys]
-                non_zero = set([i for i, c in enumerate(counts) if c >= 1])
-                counts = [c for i, c in enumerate(counts) if i in non_zero]
-                polys = [poly for i, poly in enumerate(polys) if i in non_zero]
-                assert len(polys) != 0
-                if len(polys) == 1:
-                    if counts[0] == 1:
-                        return _RealRep(polys[0], self.a + other.a, self.b + other.b)
-                self.refine()
-                other.refine()
-        if type(other) == Frac:            
-            _, poly = self.poly(PolyZZ.int(other.denominator) * PolyZZ.var() - PolyZZ.int(other.numerator)).factor_primitive()
-            return _RealRep(poly, self.a + other, self.b + other)
-        return NotImplemented
-    
-    def __radd__(self, other):
-        if type(other) == Frac:
-            return self + other
-        return NotImplemented
-    
-    def __neg__(self):            
-        return _RealRep(self.poly(-PolyZZ.var()), -self.b, -self.a)
-    
-    def __mul__(self, other):
-        if type(other) == _RealRep:
-            polys = list(root_prod_poly(self.poly, other.poly).factor().powers.keys())
-            while True:
-                points = (self.a * other.a, self.a * other.b, self.b * other.a, self.b * other.b)
-                counts = [pyalgebra.polynomials.count_real_roots([int(c) for c in poly.rep], min(points), max(points)) for poly in polys]
-                non_zero = set([i for i, c in enumerate(counts) if c >= 1])
-                counts = [c for i, c in enumerate(counts) if i in non_zero]
-                polys = [poly for i, poly in enumerate(polys) if i in non_zero]
-                assert len(polys) != 0
-                if len(polys) == 1:
-                    if counts[0] == 1:
-                        return _RealRep(polys[0], self.a + other.a, self.b + other.b)
-                self.refine()
-                other.refine()
-                
                 try:
-                    ans = Real(poly, min(points), max(points))
-                except BadRoot:
+                    ans = _RealRep.unique_root(poly, self.a + other.a, self.b + other.b)
+                except NoUniqueRoot:
                     self.refine()
                     other.refine()
                 else:
                     return ans
-##        if type(other) == QQ:
-##            if other == 0:
-##                return other
-##            elif other < 0:
-##                return (-other) * (-self)
-##            else:
-##                assert other > 0
-##                other = Frac(int(other.n), int(other.d))
-##                poly = pyalgebra.polynomials.Poly.primitive(pyalgebra.polynomials.Poly.compose(self.poly, [0, 1 / other]))
-##                return Real(PolyZZ(poly), self.a * other, self.b * other)
+        if type(other) == Frac:
+            poly = self.poly(PolyZZ([-other.numerator, other.denominator]))
+            return _RealRep(poly, self.a + other, self.b + other)
+        return NotImplemented
+    def __radd__(self, other):
+        if type(other) == Frac:
+            return self + other
+        return NotImplemented
+    def __sub__(self, other):
+        return self + (-other)
+    def __rsub__(self, other):
+        return (-self) + other
+    def __neg__(self):
+        return _RealRep(self.poly(-PolyZZ.var()), -self.b, -self.a)
+    def __mul__(self, other):
+        if type(other) == _RealRep:
+            poly = root_prod_poly(self.poly, other.poly)
+            while True:
+                points = (self.a * other.a, self.a * other.b, self.b * other.a, self.b * other.b)
+                try:
+                    ans = _RealRep.unique_root(poly, min(points), max(points))
+                except NoUniqueRoot:
+                    self.refine()
+                    other.refine()
+                else:
+                    return ans
+        if type(other) == Frac:
+            if other == 0:
+                return other
+            elif other < 0:
+                return (-other) * (-self)
+            else:
+                assert other > 0                
+                _, poly = self.poly(PolyQQ([0, QQ.int(other.denominator) / QQ.int(other.numerator)])).factor_primitive_field()
+                return _RealRep(poly, self.a * other, self.b * other)
+        return NotImplemented
+    def __rmul__(self, other):
+        if type(other) == Frac:
+            return self * other
         return NotImplemented
     
-##    def __rmul__(self, other):
-####        if type(other) == QQ:
-####            return self * other
-##        return NotImplemented
-
     def refine(self):
         #update our internal variables to get a better approximation
         m = Frac(self.a + self.b, 2)
