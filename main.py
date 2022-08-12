@@ -18,21 +18,35 @@ def test2():
 
 ##    a = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(-1, 1), Frac(0, 1))
 ##    b = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(2, 1), Frac(3, 1))
+
+    poly = x ** 12 - 1
+    for poly in poly.factor().list():
+        q = [int(c) for c in poly.rep]
+        #pyalgebra.complex_poly_view.run(q, pyalgebra.polynomials.isolate_complex_roots(q))
+        
+        for a, b, c, d in pyalgebra.polynomials.isolate_complex_roots([int(c) for c in poly.rep]):
+            print(poly)
+            print(a, b, c, d)
+            root = algebra.algebraic.ComplexRep(poly, a, b, c, d)
+            print(root)
     
-    a = algebra.algebraic._RealRep(x ** 5 - x - 1, Frac(1, 1), Frac(2, 1))
-    b = algebra.algebraic._RealRep(x ** 3 - x - 1, Frac(1, 1), Frac(2, 1))
-    c = algebra.algebraic._RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(-2, 1), Frac(-1, 1))
-    d = algebra.algebraic._RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(-1, 1), Frac(0, 1))
-    e = algebra.algebraic._RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(0, 1), Frac(1, 1))
-    f = algebra.algebraic._RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(1, 1), Frac(2, 1))
-
-    h = Frac(10, 1)
-    i = Frac(-9, 5)
-
-    print(a, b, a * b)
-    print(c, d, c * d)
-    print(e, f, e * f)
-    print(a, h, a * h)
+##    a = algebra.algebraic.RealRep(x ** 5 - x - 1, Frac(1, 1), Frac(2, 1))
+##    b = algebra.algebraic.RealRep(x ** 3 - x - 1, Frac(1, 1), Frac(2, 1))
+##    c = algebra.algebraic.RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(-2, 1), Frac(-1, 1))
+##    d = algebra.algebraic.RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(-1, 1), Frac(0, 1))
+##    e = algebra.algebraic.RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(0, 1), Frac(1, 1))
+##    f = algebra.algebraic.RealRep(2 * x ** 4 - 6 * x ** 2 + x + 1, Frac(1, 1), Frac(2, 1))
+##
+##    h = Frac(10, 1)
+##    i = Frac(-9, 5)
+##
+##    print(a, b, a * b)
+##    print(c, d, c * d)
+##    print(e, f, e * f)
+##    print(a, h, a * h)
+##
+##    print(a, a.recip())
+##    print(a, b.recip())
 
     
 

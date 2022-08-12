@@ -52,13 +52,13 @@ def eval_at_frac(poly, x):
         x_pow *= x
     return ans
 
-#the idea now is to define standalone classes _RealRep and _ComplexRep representing algebraic numbers
-#then define a class called Algebraic which uses an instance of either Frac, _RealRep, or _ComplexRep as its representative
+#the idea now is to define standalone classes RealRep and _ComplexRep representing algebraic numbers
+#then define a class called Algebraic which uses an instance of either Frac, RealRep, or _ComplexRep as its representative
 
 class NoUniqueRoot(Exception):
     pass
 
-class _RealRep():
+class RealRep():
     @classmethod
     def unique_root(cls, poly, a, b):
         ra = pyalgebra.polynomials.rational_real_root(a)
@@ -108,11 +108,11 @@ class _RealRep():
         return "≈" + str(round(float((self.a + self.b) / 2), dp))
     
     def __add__(self, other):
-        if type(other) == _RealRep:
+        if type(other) == RealRep:
             poly = root_sum_poly(self.poly, other.poly)
             while True:
                 try:
-                    ans = _RealRep.unique_root(poly, self.a + other.a, self.b + other.b)
+                    ans = RealRep.unique_root(poly, self.a + other.a, self.b + other.b)
                 except NoUniqueRoot:
                     self.refine()
                     other.refine()
@@ -120,7 +120,7 @@ class _RealRep():
                     return ans
         if type(other) == Frac:
             poly = self.poly(PolyZZ([-other.numerator, other.denominator]))
-            return _RealRep(poly, self.a + other, self.b + other)
+            return RealRep(poly, self.a + other, self.b + other)
         return NotImplemented
     def __radd__(self, other):
         if type(other) == Frac:
@@ -131,14 +131,14 @@ class _RealRep():
     def __rsub__(self, other):
         return (-self) + other
     def __neg__(self):
-        return _RealRep(self.poly(-PolyZZ.var()), -self.b, -self.a)
+        return RealRep(self.poly(-PolyZZ.var()), -self.b, -self.a)
     def __mul__(self, other):
-        if type(other) == _RealRep:
+        if type(other) == RealRep:
             poly = root_prod_poly(self.poly, other.poly)
             while True:
                 points = (self.a * other.a, self.a * other.b, self.b * other.a, self.b * other.b)
                 try:
-                    ans = _RealRep.unique_root(poly, min(points), max(points))
+                    ans = RealRep.unique_root(poly, min(points), max(points))
                 except NoUniqueRoot:
                     self.refine()
                     other.refine()
@@ -152,12 +152,28 @@ class _RealRep():
             else:
                 assert other > 0                
                 _, poly = self.poly(PolyQQ([0, QQ.int(other.denominator) / QQ.int(other.numerator)])).factor_primitive_field()
-                return _RealRep(poly, self.a * other, self.b * other)
+                return RealRep(poly, self.a * other, self.b * other)
         return NotImplemented
     def __rmul__(self, other):
         if type(other) == Frac:
             return self * other
         return NotImplemented
+
+    def recip(self):
+        poly = PolyZZ(tuple(reversed(self.poly.rep)))
+        while self.a == 0 or self.b == 0 or (self.a < 0) != (self.b < 0):
+            self.refine()
+        if self.a < 0:
+            assert self.b < 0
+            return -(-self).recip()
+        assert self.a > 0 and self.b > 0
+        while True:
+            try:
+                ans = RealRep.unique_root(poly, 1/self.b, 1/self.a)
+            except NoUniqueRoot:
+                self.refine()
+            else:
+                return ans
     
     def refine(self):
         #update our internal variables to get a better approximation
@@ -170,11 +186,82 @@ class _RealRep():
         else:
             self.b = m
             self.at_b = at_m
-    
 
-class _ComplexRep():
-    def __init__(self):
-        pass
+
+
+
+class ComplexRep():
+##    @classmethod
+##    def unique_root(cls, poly, a, b, c, d):
+##        try:
+##            count = pyalgebra.polynomials.count_complex_roots([int(c) for c in poly.rep], a, b, c, d)
+##        except pyalgebra.polynomials.BoundaryRoot:
+##            raise NoUniqueRoot()
+##        else:
+##            if count == 0:
+##                raise Exception()
+##            elif count >= 2:
+##                raise NoUniqueRoot()
+##
+##            polys = list(poly.factor().powers.keys())
+##            roots = [pyalgebra.polynomials.isolate_real_roots([int(c) for c in poly.rep], a, b) for poly in polys]
+##            roots = [pyalgebra.polynomials.isolate_real_roots([int(c) for c in poly.rep], a, b) for poly in polys]
+##            prs = list(zip(polys, roots))
+##            prs = [(poly, [r for r in roots if ra < r < rb]) for poly, roots in prs] #delete roots which lie outside the search range
+##            prs = [(poly, roots) for poly, roots in prs if len(roots) != 0] #delete polynomials with no possible roots
+##                
+##            return cls(poly, a, b, c, d)
+    
+    def __init__(self, poly, a, b, c, d):
+##        assert poly.degree() >= 2
+        assert poly.is_irreducible()
+        assert type(a) == Frac
+        assert type(b) == Frac
+        assert type(c) == Frac
+        assert type(d) == Frac
+        assert a < b
+        assert c < d
+        self.a = a
+        self.b = b
+        self.c = c
+        self.d = d
+        self.poly = poly
+
+    @property
+    def error(self):
+        return max(self.b - self.a, self.d - self.c)
+
+    def __str__(self):
+        dp = 3
+        while self.error > 10 ** (-dp-1):
+            self.refine()
+        return "≈" + str(complex(round(float((self.a + self.b) / 2), dp),
+                                 round(float((self.c + self.d) / 2), dp))).replace("j", "i").replace("(", "").replace(")", "")
+
+    def refine(self):
+        def pick(box1, box2):
+            if pyalgebra.polynomials.count_complex_roots([int(c) for c in self.poly.rep], *box1) == 1:
+                return box1
+            else:
+                return box2
+        a, b, c, d = self.a, self.b, self.c, self.d
+        if b - a > d - c:
+            m = Frac(a + b, 2)
+            print("m1", m)
+            try:
+                box = pick((a, m, c, d), (m, b, c, d))
+            except pyalgebra.polynomials.BoundaryRoot:
+                m = Frac(2 * a + b, 3)
+                print("m2", m)
+                box = pick((a, m, c, d), (m, b, c, d))
+        else:
+            m = Frac(c + d, 2)
+            try:
+                box = pick((a, b, c, m), (a, b, m, d))
+            except pyalgebra.polynomials.BoundaryRoot:
+                m = Frac(2 * c + d, 3)
+                box = pick((a, b, c, m), (a, b, m, d))
+        self.a, self.b, self.c, self.d = box
 
 
 
@@ -524,6 +611,7 @@ if False:
             else:
                 assert type(r) == _Complex
                 return a < r.b and r.a < b and c < r.d and r.c < d
+            
         def contains(r):
             if type(r) == QQ:
                 r = Frac(int(r.n), int(r.d))
