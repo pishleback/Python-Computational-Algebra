@@ -19,16 +19,12 @@ def test2():
 ##    a = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(-1, 1), Frac(0, 1))
 ##    b = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(2, 1), Frac(3, 1))
 
-    poly = x ** 12 - 1
-    for poly in poly.factor().list():
-        q = [int(c) for c in poly.rep]
-        #pyalgebra.complex_poly_view.run(q, pyalgebra.polynomials.isolate_complex_roots(q))
-        
-        for a, b, c, d in pyalgebra.polynomials.isolate_complex_roots([int(c) for c in poly.rep]):
-            print(poly)
-            print(a, b, c, d)
-            root = algebra.algebraic.ComplexRep(poly, a, b, c, d)
-            print(root)
+    t = 0
+    poly = x ** 5 - x - 2
+    roots = list(algebra.algebraic.all_roots_rep(poly))
+    for a in roots:
+        for b in roots:
+            print(a / b)
     
 ##    a = algebra.algebraic.RealRep(x ** 5 - x - 1, Frac(1, 1), Frac(2, 1))
 ##    b = algebra.algebraic.RealRep(x ** 3 - x - 1, Frac(1, 1), Frac(2, 1))

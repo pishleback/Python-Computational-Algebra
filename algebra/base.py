@@ -423,15 +423,19 @@ class UniqueFactorizationDomain(IntegralDomain):
 
     @classmethod
     def gcd_list(cls, elems):
-        assert len(elems) >= 1
-        if len(elems) == 1:
-            g = elems[0]
-        elif len(elems) == 2:
-            g = cls.gcd(*elems)
-        else:
-            i = len(elems) // 2
-            g = cls.gcd(cls.gcd_list(elems[:i]), cls.gcd_list(elems[i:]))
-        return g
+        elems = [x for x in elems if x != 0]
+        if len(elems) == 0:
+            raise ZeroDivisionError()
+        def gcd_list_rec(elems):
+            if len(elems) == 1:
+                g = elems[0]
+            elif len(elems) == 2:
+                g = cls.gcd(*elems)
+            else:
+                i = len(elems) // 2
+                g = cls.gcd(gcd_list_rec(elems[:i]), gcd_list_rec(elems[i:]))
+            return g
+        return gcd_list_rec(elems)
 
     @classmethod
     def lcm(cls, x, y):

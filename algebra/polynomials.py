@@ -205,8 +205,6 @@ def PolyOver(ring, var = "λ"):
                 #kronekers method over general UFDs
                 #need to add squarefree factorization to speed this up
                 #also finding rational roots
-
-                print(self)
                 
                 m, f = self.factor_primitive()
 
