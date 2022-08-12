@@ -83,6 +83,9 @@ class _RealRep():
             self.refine()
         return "≈" + str(round(float((self.a + self.b) / 2), dp))
 
+    def __hash__(self):
+        return hash(self.poly.degree())
+
     def __eq__(self, other):
         if type(other) == _RealRep:
             if self.b < other.a or other.b < self.a:
@@ -233,6 +236,9 @@ class _ComplexRep():
     def error(self):
         return max(self.b - self.a, self.d - self.c)
 
+    def __hash__(self):
+        return hash(self.poly.degree())
+    
     def __eq__(self, other):
         if type(other) == _ComplexRep:
             if self.b < other.a or other.b < self.a or self.d < other.c or other.d < self.c:
@@ -479,21 +485,27 @@ def all_roots_rep(poly):
 
 class Algebraic(base.Field):
     @classmethod
+    def poly_roots(cls, poly):
+        assert isinstance(poly, PolyZZ)
+        return list(cls(rep) for rep in all_roots_rep(poly))
+    
+    @classmethod
     def int(cls, n):
-        return cls(QQ.int(n))
+        return cls(Frac(n, 1))
 
     def __init__(self, rep):
-        assert type(rep) in [QQ, _Real, _Complex]
+        assert type(rep) in {Frac, _RealRep, _ComplexRep}
         self.rep = rep
+        
     def __str__(self):
         return str(self.rep)
 
     def is_rat(self):
-        return type(self.rep) == QQ
+        return type(self.rep) == Frac
     def is_real(self):
-        return type(self.rep) == _Real
+        return type(self.rep) == _RealRep
     def is_complex(self):
-        return type(self.rep) == _Complex
+        return type(self.rep) == _ComplexRep
     
     def hash(self):
         return hash(self.rep)
@@ -521,20 +533,17 @@ class Algebraic(base.Field):
     def __float__(self):
         return float(self.rep)
     def __complex__(self):
-        if type(self.rep) in [QQ, _Real]:
-            return complex(float(self.rep), 0)
-        else:
-            return complex(self.rep)
+        return complex(self.rep)
     
-    def floor(self):
-        return self.rep.floor()
+##    def floor(self):
+##        return self.rep.floor()
     def min_poly(self):
         if self.is_rat():
-            return (PolyQQ.var() - self.rep).primitive()
+            return PolyZZ([-self.rep.numerator, self.rep.denominator])
         elif self.is_real():
-            return PolyZZ(self.rep.poly)
+            return self.rep.poly
         elif self.is_complex():
-            return PolyZZ(self.rep.poly)
+            return self.rep.poly
     def degree(self):
         return self.min_poly().degree()
 
@@ -542,57 +551,14 @@ class Algebraic(base.Field):
 
 
 
-def split_into_factors(find_roots):
-    def new_f(poly):
-        assert type(poly) in {PolyZZ, PolyQQ}
-        poly = poly.primitive() #unique associate
-        assert type(poly) == PolyZZ
-        for p, k in primitive_factors(poly).items():
-            for _ in range(k):
-                yield from find_roots(p)
-    return new_f
 
-@split_into_factors
-@lambda f : lambda p : tuple(f(p))
-def rat_roots(poly):
-    if poly.degree() == 1:
-        a, b = poly[0], poly[1]
-        yield QQ(-a, b)
 
-@split_into_factors
-@functools.cache
-@lambda f : lambda p : tuple(f(p))
-def real_roots(poly):
-    if poly.degree() >= 2:
-        poly_tuple = tuple(int(x) for x in poly.rep)
-        for a, b in  pyalgebra.polynomials.isolate_real_roots(poly_tuple):
-            yield _Real(poly_tuple, Frac(a), Frac(b))
-    
-@split_into_factors
-@functools.cache
-@lambda f : lambda p : tuple(f(p))
-def imag_roots(poly):
-    if poly.degree() >= 2:
-        poly_tuple = tuple(int(x) for x in poly.rep)
-        for a, b, c, d in pyalgebra.polynomials.isolate_imag_roots(poly_tuple):
-            yield _Complex(poly_tuple, Frac(a), Frac(b), Frac(c), Frac(d))
-    
-    
 
-def roots(poly, *, rat = False, real = False, imag = False):
-    if rat == real == imag == False:
-        rat, real, imag = True, True, True
-        
-    if rat:
-        for x in rat_roots(poly):
-            yield Algebraic(x)
-    if real:
-        for x in real_roots(poly):
-            yield Algebraic(x)
-    if imag:
-        for x in imag_roots(poly):
-            yield Algebraic(x)
-            
+
+
+
+
+
 
 
 

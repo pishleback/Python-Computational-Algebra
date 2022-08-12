@@ -20,11 +20,10 @@ def test2():
 ##    b = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(2, 1), Frac(3, 1))
 
     t = 0
-    poly = x ** 5 - x - 2
-    roots = list(algebra.algebraic.all_roots_rep(poly))
+    poly = x ** 24 - 1
+    roots = list(algebra.algebraic.Algebraic.poly_roots(poly))
     for a in roots:
-        for b in roots:
-            print(a / b)
+        print(a, a + 1, (a + 1).min_poly())
     
 ##    a = algebra.algebraic.RealRep(x ** 5 - x - 1, Frac(1, 1), Frac(2, 1))
 ##    b = algebra.algebraic.RealRep(x ** 3 - x - 1, Frac(1, 1), Frac(2, 1))
