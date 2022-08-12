@@ -300,12 +300,19 @@ class Poly():
         c_horz_re, c_horz_im = Poly.at_fixed_im(poly, c)
         d_horz_re, d_horz_im = Poly.at_fixed_im(poly, d)
 
-        assert (t1 := Poly.evaluate(a_vert_re, c)) == Poly.evaluate(c_horz_re, a)
-        assert (t2 := Poly.evaluate(a_vert_re, d)) == Poly.evaluate(d_horz_re, a)
-        assert (t3 := Poly.evaluate(b_vert_re, c)) == Poly.evaluate(c_horz_re, b)
-        assert (t4 := Poly.evaluate(b_vert_re, d)) == Poly.evaluate(d_horz_re, b)
-        if any(t == 0 for t in [t1, t2, t3, t4]):
-            raise BoundaryRoot("Vertex root")
+        assert (t1r := Poly.evaluate(a_vert_re, c)) == Poly.evaluate(c_horz_re, a)
+        assert (t2r := Poly.evaluate(a_vert_re, d)) == Poly.evaluate(d_horz_re, a)
+        assert (t3r := Poly.evaluate(b_vert_re, c)) == Poly.evaluate(c_horz_re, b)
+        assert (t4r := Poly.evaluate(b_vert_re, d)) == Poly.evaluate(d_horz_re, b)
+
+        assert (t1i := Poly.evaluate(a_vert_im, c)) == Poly.evaluate(c_horz_im, a)
+        assert (t2i := Poly.evaluate(a_vert_im, d)) == Poly.evaluate(d_horz_im, a)
+        assert (t3i := Poly.evaluate(b_vert_im, c)) == Poly.evaluate(c_horz_im, b)
+        assert (t4i := Poly.evaluate(b_vert_im, d)) == Poly.evaluate(d_horz_im, b)
+        
+        for tr, ti in [[t1r, t1i], [t2r, t2i], [t3r, t3i], [t4r, t4i]]:
+            if tr == ti == 0:
+                raise BoundaryRoot("Vertex root")
         
 
         def crossings(re, im, s, t):
@@ -434,7 +441,7 @@ class Poly():
         poly = Poly.primitive(Poly.sqfree(poly))
 
         #find a bound M with all roots in the open box of side lengths 2M
-        M = 1
+        M = Frac(1, 1)
         while True:
             try:
                 n = Poly.count_complex_roots(poly, -M, M, -M, M)
@@ -445,7 +452,7 @@ class Poly():
                     break
             M *= 2
 
-        off = 2
+        off = Frac(2, 1)
         M += 1
         while True:
             try:
@@ -466,7 +473,7 @@ class Poly():
         assert r == 0
         
         #find a bound M with all roots in the open box in the upper half place which tends to the whole plane as m -> infty
-        M = 2
+        M = Frac(2, 1)
         while True:
             try:
                 n = Poly.count_complex_roots(poly, -M, M, Frac(1, 2 ** M), M)
@@ -477,7 +484,7 @@ class Poly():
                     break
             M *= 2
 
-        off = 2
+        off = Frac(2, 1)
         M += 1
         while True:
             try:
@@ -691,10 +698,10 @@ def test():
 ##    p = symbol_poly(lambda x : 61 - 273 * x + 305 * x ** 2 + x ** 3) #reeeeeeeally close roots on this one
 ##    p = symbol_poly(lambda x : x ** 12 - 3 * x ** 5 + 6 * x ** 2 - x + 1)
 ##    p = symbol_poly(lambda x : x ** 12 - x ** 11 - 2)
-    import random
-    p = symbol_poly(lambda x : sum(random.randint(0, 1) * x ** k for k in range(10)))
+##    import random
+##    p = symbol_poly(lambda x : sum(random.randint(0, 1) * x ** k for k in range(10)))
 ##    p = symbol_poly(lambda x : (x + x ** 2) ** 10 - 1)
-    p = symbol_poly(lambda x : x ** 2 - 1)    
+##    p = symbol_poly(lambda x : x ** 2 - 1)    
 
     print(p, len(p))
     
