@@ -16,12 +16,11 @@ def test2():
     QQ_bar = algebra.algebraic.Algebraic
 
     x = PolyQQ.var()
-    poly = (x ** 12 - 1) / 10
+    poly = x ** 16 - 1
 
-    print(poly)
-    for alpha in QQ.AlgebraicClosure.roots(poly):
-        beta = alpha ** 12
-        print(beta, beta.min_poly())
+
+    for a in QQ.AlgebraicClosure.roots(poly):
+        print(a, a.min_poly())
 
 ##    x = PolyZZ.var()
 ##

@@ -529,10 +529,6 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
     
                     class Algebraic(super().AlgebraicClosureCls()):
                         @classmethod
-                        def typestr(cls):
-                            return "Algebraic(ℚ)"
-
-                        @classmethod
                         def convert_from_field(cls, x):
                             assert isinstance(x, QQ)
                             return cls(Frac(int(x.n), int(x.d)))
@@ -890,6 +886,10 @@ class Field(EuclideanDomain, metaclass = FieldType):
     def AlgebraicClosureCls(cls):
         field = cls
         class AlgebraicClosure(Field):
+            @classmethod
+            def typestr(cls):
+                return f"AlgebraicClosure({field})"
+                        
             @classmethod
             def convert(cls, x):
                 try:
