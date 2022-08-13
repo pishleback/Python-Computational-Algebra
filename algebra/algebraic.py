@@ -470,13 +470,17 @@ def all_roots_rep(poly):
     for sub_poly, k in factors.powers.items():
         coeffs = [int(c) for c in sub_poly.rep]
         if sub_poly.degree() == 1:
-            yield -Frac(int(coeffs[0]), int(coeffs[1]))
+            root = -Frac(int(coeffs[0]), int(coeffs[1]))
+            yield root, k
         else:
             for a, b in pyalgebra.polynomials.isolate_real_roots(coeffs):
-                yield _RealRep(sub_poly, a, b)
+                root = _RealRep(sub_poly, a, b)
+                yield root, k
+                
             for a, b, c, d in pyalgebra.polynomials.isolate_imag_roots(coeffs):
-                yield _ComplexRep(sub_poly, a, b, c, d)
-
+                root = _ComplexRep(sub_poly, a, b, c, d)
+                yield root, k
+            
 Algebraic = base.ZZ.FractionField.AlgebraicClosure
 
 

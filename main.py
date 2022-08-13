@@ -16,11 +16,11 @@ def test2():
     QQ_bar = algebra.algebraic.Algebraic
 
     x = PolyQQ.var()
-    poly = x ** 16 - 1
+    poly = (x**2 - 2) ** 2
 
 
-    for a in QQ.AlgebraicClosure.roots(poly):
-        print(a, a.min_poly())
+    for a, k in QQ.AlgebraicClosure.root_powers(poly):
+        print(a, k)
 
 ##    x = PolyZZ.var()
 ##
@@ -76,15 +76,7 @@ def test1():
     print(A.min_poly())
     print(A.char_poly())
 
+    print(M)
 
-    input("done")
-
-
-    P = algebra.polynomials.PolyOver(QQ)
-    x = P.var()
-
-    a = 12 * (x ** 5 - x ** 4 - 2 * x ** 3 - 8 * x ** 2 + 6 * x - 1) ** 10 * (x + 3) ** 6
-    #a = 12 * (x + 1) ** 3
-    print(a.factor())
 
 test2()

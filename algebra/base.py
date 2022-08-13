@@ -534,10 +534,11 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
                             return cls(Frac(int(x.n), int(x.d)))
                             
                         @classmethod
-                        def roots(cls, poly):
+                        def root_powers(cls, poly):
                             assert isinstance(poly, PolyQQ)
                             _, poly = poly.factor_primitive_field()
-                            return list(cls(rep) for rep in algebraic.all_roots_rep(poly))
+                            for rep, mult in algebraic.all_roots_rep(poly):
+                                yield cls(rep), mult
                         
                         @classmethod
                         def int(cls, n):
@@ -906,10 +907,16 @@ class Field(EuclideanDomain, metaclass = FieldType):
                 raise NotImplementedError(f"Conversion from {field} to its algebraic closure {cls} is not yet implemented")
                 
             @classmethod
-            def roots(cls, poly):
+            def root_powers(cls, poly):
+                #should return a list of all roots of poly repeated with multiplicity
                 from algebra import polynomials
                 assert isinstance(poly, polynomials.PolyOver(field))
                 raise NotImplementedError()
+            @classmethod
+            def root_list(cls, poly):
+                for root, mult in cls.root_powers(poly):
+                    for _ in range(mult):
+                        yield root
             def min_poly(self):
                 raise NotImplementedError()
             def degree(self):

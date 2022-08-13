@@ -485,6 +485,11 @@ def MatrixOver(ring):
             return self.char_mat().smith_diagonal()[-1]
         def char_poly(self):
             return polynomials.PolyOver(ring).product(self.char_mat().smith_diagonal())
+
+
+    if issubclass(ring, base.Field):
+        class Matrix(Matrix):
+            pass
             
     return Matrix
     
