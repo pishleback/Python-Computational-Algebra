@@ -13,17 +13,25 @@ def test2():
     QQ = algebra.base.ZZ.FractionField
     PolyZZ = algebra.polynomials.PolyOver(ZZ)
     PolyQQ = algebra.polynomials.PolyOver(QQ)
+    QQ_bar = algebra.algebraic.Algebraic
 
-    x = PolyZZ.var()
+    x = PolyQQ.var()
+    poly = (x ** 12 - 1) / 10
 
-##    a = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(-1, 1), Frac(0, 1))
-##    b = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(2, 1), Frac(3, 1))
+    print(poly)
+    for alpha in QQ.AlgebraicClosure.roots(poly):
+        print(alpha, alpha.min_poly())
 
-    t = 0
-    poly = x ** 24 - 1
-    roots = list(algebra.algebraic.Algebraic.poly_roots(poly))
-    for a in roots:
-        print(a, a + 1, (a + 1).min_poly())
+##    x = PolyZZ.var()
+##
+####    a = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(-1, 1), Frac(0, 1))
+####    b = algebra.algebraic._RealRep(x ** 2 - 2 * x - 1, Frac(2, 1), Frac(3, 1))
+##
+##    t = 0
+##    poly = x ** 24 - 1
+##    roots = list(algebra.algebraic.Algebraic.poly_roots(poly))
+##    for a in roots:
+##        print(a, a + 1, (a + 1).min_poly())
     
 ##    a = algebra.algebraic.RealRep(x ** 5 - x - 1, Frac(1, 1), Frac(2, 1))
 ##    b = algebra.algebraic.RealRep(x ** 3 - x - 1, Frac(1, 1), Frac(2, 1))

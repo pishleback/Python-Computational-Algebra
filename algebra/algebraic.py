@@ -464,9 +464,8 @@ def ComplexRep(poly, a, b, c, d):
     assert len(roots) == 1
     return roots[0]
                      
-
-
 def all_roots_rep(poly):
+    assert isinstance(poly, PolyZZ)
     factors = poly.factor()
     for sub_poly, k in factors.powers.items():
         coeffs = [int(c) for c in sub_poly.rep]
@@ -477,77 +476,8 @@ def all_roots_rep(poly):
                 yield _RealRep(sub_poly, a, b)
             for a, b, c, d in pyalgebra.polynomials.isolate_imag_roots(coeffs):
                 yield _ComplexRep(sub_poly, a, b, c, d)
-        
-        
 
-
-
-
-class Algebraic(base.Field):
-    @classmethod
-    def poly_roots(cls, poly):
-        assert isinstance(poly, PolyZZ)
-        return list(cls(rep) for rep in all_roots_rep(poly))
-    
-    @classmethod
-    def int(cls, n):
-        return cls(Frac(n, 1))
-
-    def __init__(self, rep):
-        assert type(rep) in {Frac, _RealRep, _ComplexRep}
-        self.rep = rep
-        
-    def __str__(self):
-        return str(self.rep)
-
-    def is_rat(self):
-        return type(self.rep) == Frac
-    def is_real(self):
-        return type(self.rep) == _RealRep
-    def is_complex(self):
-        return type(self.rep) == _ComplexRep
-    
-    def hash(self):
-        return hash(self.rep)
-    def equal(self, other):
-        if (cls := type(self)) == type(other):
-            if type(self.rep) == type(other.rep):
-                return self.rep == other.rep
-        return False
-        
-    def add(self, other):
-        assert (cls := type(self)) == type(other)
-        return cls(self.rep + other.rep)
-    def neg(self):
-        return type(self)(-self.rep)
-    def mul(self, other):
-        assert (cls := type(self)) == type(other)
-        return cls(self.rep * other.rep)
-    def recip(self):
-        return type(self)(self.rep.recip())
-    def lt(self, other):
-        assert (cls := type(self)) == type(other)
-        return self.rep < other.rep
-    def __int__(self):
-        return int(self.rep)
-    def __float__(self):
-        return float(self.rep)
-    def __complex__(self):
-        return complex(self.rep)
-    
-##    def floor(self):
-##        return self.rep.floor()
-    def min_poly(self):
-        if self.is_rat():
-            return PolyZZ([-self.rep.numerator, self.rep.denominator])
-        elif self.is_real():
-            return self.rep.poly
-        elif self.is_complex():
-            return self.rep.poly
-    def degree(self):
-        return self.min_poly().degree()
-
-
+Algebraic = base.ZZ.FractionField.AlgebraicClosure
 
 
 

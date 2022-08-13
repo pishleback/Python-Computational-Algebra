@@ -518,6 +518,90 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
         
         class FractionField(Field):
             @classmethod
+            def AlgebraicClosureCls(cls):
+                from algebra import polynomials
+
+                if ring is ZZ:
+                    from algebra import algebraic
+                    QQ = ZZ.FractionField
+                    PolyZZ = polynomials.PolyOver(ZZ)
+                    PolyQQ = polynomials.PolyOver(QQ)
+    
+                    class Algebraic(super().AlgebraicClosureCls()):
+                        @classmethod
+                        def typestr(cls):
+                            return "Algebraic(ℚ)"
+                            
+                        @classmethod
+                        def roots(cls, poly):
+                            assert isinstance(poly, PolyQQ)
+                            _, poly = poly.factor_primitive_field()
+                            return list(cls(rep) for rep in algebraic.all_roots_rep(poly))
+                        
+                        @classmethod
+                        def int(cls, n):
+                            return cls(Frac(n, 1))
+
+                        def __init__(self, rep):
+                            assert type(rep) in {Frac, algebraic._RealRep, algebraic._ComplexRep}
+                            self.rep = rep
+                            
+                        def __str__(self):
+                            return str(self.rep)
+                        
+                        def hash(self):
+                            return hash(self.rep)
+                        def equal(self, other):
+                            if (cls := type(self)) == type(other):
+                                if type(self.rep) == type(other.rep):
+                                    return self.rep == other.rep
+                            return False
+                            
+                        def add(self, other):
+                            assert (cls := type(self)) == type(other)
+                            return cls(self.rep + other.rep)
+                        def neg(self):
+                            return type(self)(-self.rep)
+                        def mul(self, other):
+                            assert (cls := type(self)) == type(other)
+                            return cls(self.rep * other.rep)
+                        def recip(self):
+                            return type(self)(self.rep.recip())
+                        
+                    ##    def floor(self):
+                    ##        return self.rep.floor()
+                        def min_poly_ZZ(self):
+                            if self.is_rat():
+                                return PolyZZ([-self.rep.numerator, self.rep.denominator])
+                            elif self.is_real():
+                                return self.rep.poly
+                            elif self.is_complex():
+                                return self.rep.poly
+                        def min_poly(self):
+                            return PolyQQ.convert(self.min_poly_ZZ())
+
+##                        def lt(self, other):
+##                            assert (cls := type(self)) == type(other)
+                            return self.rep < other.rep
+                        def __int__(self):
+                            return int(self.rep)
+                        def __float__(self):
+                            return float(self.rep)
+                        def __complex__(self):
+                            return complex(self.rep)
+
+                        def is_rat(self):
+                            return type(self.rep) == Frac
+                        def is_real(self):
+                            return type(self.rep) == algebraic._RealRep
+                        def is_complex(self):
+                            return type(self.rep) == algebraic._ComplexRep
+                        
+                    return Algebraic
+
+                raise NotImplementedError()
+            
+            @classmethod
             def typestr(cls):
                 return f"FractionField({ring})"
             
@@ -789,7 +873,29 @@ class NotFractionField(Exception):
     pass
 
 
-class Field(EuclideanDomain):
+class FieldType(type(EuclideanDomain)):
+    def __getattr__(cls, name):
+        #allow field.AlgebraicClosure in place of field.AlgebraicClosureCls()
+        if name == "AlgebraicClosure":
+            return cls.AlgebraicClosureCls()
+        return super().__getattr__(name)
+
+class Field(EuclideanDomain, metaclass = FieldType):
+    @classmethod
+    def AlgebraicClosureCls(cls):
+        field = cls
+        class AlgebraicClosure(Field):
+            @classmethod
+            def roots(cls, poly):
+                from algebra import polynomials
+                assert isinstance(poly, polynomials.PolyOver(field))
+                raise NotImplementedError()
+            def min_poly(self):
+                raise NotImplementedError()
+            def degree(self):
+                return self.min_poly().degree()
+        return AlgebraicClosure
+    
     @classmethod
     def test_axioms(cls, test):
         super().test_axioms(test)
@@ -806,10 +912,6 @@ class Field(EuclideanDomain):
             return cls.int(x.numerator) / cls.int(x.denominator)
         else:
             raise NotImplementedError()
-
-    @classmethod
-    def can_factor(cls):
-        return True
 
     @classmethod
     def is_fraction_field(cls):
@@ -841,11 +943,16 @@ class Field(EuclideanDomain):
     def mod(self, other):
         assert (cls := type(self)) == type(other)
         return 0
+
+    @classmethod
+    def can_factor(cls):
+        return True
     def factor(self):
         if self == 0:
             return None
         else:
             return self.Factorization(self, {})
+
 
 
 
