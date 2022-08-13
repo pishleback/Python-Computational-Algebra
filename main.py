@@ -20,7 +20,8 @@ def test2():
 
     print(poly)
     for alpha in QQ.AlgebraicClosure.roots(poly):
-        print(alpha, alpha.min_poly())
+        beta = alpha ** 12
+        print(beta, beta.min_poly())
 
 ##    x = PolyZZ.var()
 ##

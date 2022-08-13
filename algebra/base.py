@@ -531,6 +531,11 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
                         @classmethod
                         def typestr(cls):
                             return "Algebraic(ℚ)"
+
+                        @classmethod
+                        def convert_from_field(cls, x):
+                            assert isinstance(x, QQ)
+                            return cls(Frac(int(x.n), int(x.d)))
                             
                         @classmethod
                         def roots(cls, poly):
@@ -885,6 +890,21 @@ class Field(EuclideanDomain, metaclass = FieldType):
     def AlgebraicClosureCls(cls):
         field = cls
         class AlgebraicClosure(Field):
+            @classmethod
+            def convert(cls, x):
+                try:
+                    return super().convert(x)
+                except NotImplementedError:
+                    pass
+                if isinstance(x, field):
+                    return cls.convert_from_field(x)
+                else:
+                    return cls.convert_from_field(field.convert(x))
+
+            @classmethod
+            def convert_from_field(cls, x):
+                raise NotImplementedError(f"Conversion from {field} to its algebraic closure {cls} is not yet implemented")
+                
             @classmethod
             def roots(cls, poly):
                 from algebra import polynomials
