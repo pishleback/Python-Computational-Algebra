@@ -59,6 +59,7 @@ def test1():
     G = algebra.base.Gaussian
     i = G(0, 1)
 
+    QQbar = QQ.AlgebraicClosure
 
     M = algebra.matricies.MatrixOver(QQ)
 
@@ -75,8 +76,10 @@ def test1():
     print(A.char_mat().smith_normal_form())
     print(A.min_poly())
     print(A.char_poly())
+    for root in QQbar.root_list(A.char_poly()):
+        print(root)
 
     print(M)
 
 
-test2()
+test1()
