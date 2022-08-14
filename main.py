@@ -20,7 +20,7 @@ def test2():
 
 
     for a, k in QQ.AlgebraicClosure.root_powers(poly):
-        print(a, k)
+        print(QQ.int(1) + a, k)
 
 ##    x = PolyZZ.var()
 ##

@@ -515,7 +515,6 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
     @cached_classmethod
     def FractionFieldCls(cls):
         ring = cls
-        
         class FractionField(Field):
             @classmethod
             def AlgebraicClosureCls(cls):
@@ -529,10 +528,19 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
     
                     class Algebraic(super().AlgebraicClosureCls()):
                         @classmethod
-                        def convert_from_field(cls, x):
-                            assert isinstance(x, QQ)
-                            return cls(Frac(int(x.n), int(x.d)))
-                            
+                        def convert(cls, x):
+                            try:
+                                return super().convert(x)
+                            except NotImplementedError:
+                                pass
+                            if isinstance(x, FractionField):
+                                #conversion from PRIME subfield (in this case QQ)
+                                #in general, shoud not implemented conversion from base field to algebraic closure becasue no _cannonical_ embedding exists
+                                #instead should use seperate embedding objects and embed explicitly using these
+                                return cls(Frac(int(x.n), int(x.d)))
+                            else:
+                                return cls.convert(FractionField.convert(x))
+
                         @classmethod
                         def root_powers(cls, poly):
                             assert isinstance(poly, PolyQQ)
@@ -598,7 +606,6 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
                             return type(self.rep) == algebraic._RealRep
                         def is_complex(self):
                             return type(self.rep) == algebraic._ComplexRep
-                        
                     return Algebraic
 
                 raise NotImplementedError()
@@ -890,21 +897,6 @@ class Field(EuclideanDomain, metaclass = FieldType):
             @classmethod
             def typestr(cls):
                 return f"AlgebraicClosure({field})"
-                        
-            @classmethod
-            def convert(cls, x):
-                try:
-                    return super().convert(x)
-                except NotImplementedError:
-                    pass
-                if isinstance(x, field):
-                    return cls.convert_from_field(x)
-                else:
-                    return cls.convert_from_field(field.convert(x))
-
-            @classmethod
-            def convert_from_field(cls, x):
-                raise NotImplementedError(f"Conversion from {field} to its algebraic closure {cls} is not yet implemented")
                 
             @classmethod
             def root_powers(cls, poly):
