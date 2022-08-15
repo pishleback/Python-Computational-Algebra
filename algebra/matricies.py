@@ -307,14 +307,13 @@ def MatrixOver(ring):
                                     H = H.row_add(ar, r, m)
                                     U = U.row_add(ar, r, m)
                             #make sure: if pivot elements are units, then they are 1
-                            try:
-                                m = H[r, c].recip()
-                            except base.NotDivisibleError:
-                                pass
-                            else:
-                                H = H.row_mult(r, m)
-                                U = U.row_mult(r, m)
-                                det_U *= m
+                                    
+                            u, _ = H[r, c].factor_favorite_associate()
+                            v = u.recip()
+                            H = H.row_mult(r, v)
+                            U = U.row_mult(r, v)
+                            det_U *= v
+                                
                             pivots.append(c)
                             r += 1
                             c += 1
@@ -385,13 +384,10 @@ def MatrixOver(ring):
                         #if there are none, then euclidian algorithm is complete
 
                         #put diagonal elements into standard associate form (e.g. for Z, make them positive. for fields, make them 1)
-                        try:
-                            m = A[k, k].recip()
-                        except base.NotDivisibleError:
-                            pass
-                        else:
-                            A = A.row_mult(k, m)
-                            S = S.row_mult(k, m)
+                        u, _ = A[k, k].factor_favorite_associate()
+                        v = u.recip()
+                        A = A.row_mult(k, v)
+                        S = S.row_mult(k, v)
 
                         #now we want all other elements to be multiples of this top left element
                         for r, c in itertools.product(range(k + 1, self.rows), range(k + 1, self.cols)):
@@ -480,7 +476,7 @@ def MatrixOver(ring):
             polyring = polynomials.PolyOver(ring)
             Pmat = MatrixOver(polyring)
             pself = Pmat(self.rows, self.cols, [[polyring.convert(self[r, c]) for c in range(self.cols)] for r in range(self.rows)])
-            return pself - polyring.var() * Pmat.eye(n)
+            return polyring.var() * Pmat.eye(n) - pself
         def min_poly(self):
             return self.char_mat().smith_diagonal()[-1]
         def char_poly(self):

@@ -154,8 +154,11 @@ class AbGroup(MathsSet):
     def __neg__(self):
         return self.neg()
 
+#whenever we try to do something with zero that can only be done on non-zero stuff
+class ZeroError(Exception):
+    pass
 
-class NotDivisibleError(ZeroDivisionError):
+class NotDivisibleError(Exception):
     pass
 
 
@@ -285,7 +288,19 @@ class Ring(NComRing):
         except NotDivisibleError:
             return False
 
-    
+    #sometimes we only care about elements up to asscoiates
+    #in this case, what is our favorite choice of associate?
+    #e.g.
+    #in Z choose the positive associate
+    #in a field choose 1
+    #in a polynomial ring choise the primitive polynomial where the highest order coefficient is the favorite associate in the base ring
+    def factor_favorite_associate(self):
+        #return unit, assoc s.t. self = unit * assoc
+        #assoc is our chosen favorite associate
+        if self == 0:
+            raise ZeroError()
+        return type(self).int(1), self
+
 
     #implement a/b as exact division
     #note that this is not compatible with builtin integer division, so builtin integers should
@@ -418,14 +433,14 @@ class UniqueFactorizationDomain(IntegralDomain):
         if y == 0:
             return x
         if x == y == 0:
-            raise ZeroDivisionError()
+            raise ZeroError()
         return cls.Factorization.gcd([x.factor(), y.factor()]).expand()
 
     @classmethod
     def gcd_list(cls, elems):
         elems = [x for x in elems if x != 0]
         if len(elems) == 0:
-            raise ZeroDivisionError()
+            raise ZeroError()
         def gcd_list_rec(elems):
             if len(elems) == 1:
                 g = elems[0]
@@ -440,7 +455,7 @@ class UniqueFactorizationDomain(IntegralDomain):
     @classmethod
     def lcm(cls, x, y):
         if x == 0 or y == 0:
-            raise ZeroDivisionError()
+            raise ZeroError()
         x = cls.convert(x)
         y = cls.convert(y)
         g = cls.gcd(x, y)
@@ -709,7 +724,7 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
     @classmethod
     def gcd(cls, x, y):
         if x == 0 and y == 0:
-            raise ZeroDivisionError()
+            raise ZeroError()
         while y != cls.int(0):
             x, y = y, x % y
         return x
@@ -944,6 +959,12 @@ class Field(EuclideanDomain, metaclass = FieldType):
         super().init_cls()
         cls.fraction_ring = None
 
+    #1 is always the favorite asociate in a field
+    def factor_favorite_associate(self):
+        if self == 0:
+            raise ZeroError()
+        return self, type(self).int(1)
+
     #should implement either recip or exactdiv to get a field
     def exactdiv(self, other):
         assert (cls := type(self)) == type(other)
@@ -1117,6 +1138,14 @@ class ZZ(EuclideanDomain):
         powers = {type(self)(f) : p for f, p in fs.items()}
         unit = type(self)(unit)
         return type(self).Factorization(unit, powers)
+
+    def factor_favorite_associate(self):
+        if self == 0:
+            raise ZeroError()
+        if self.rep < 0:
+            return type(self).int(-1), -self
+        else:
+            return type(self).int(1), self
     
 
 
@@ -1270,6 +1299,13 @@ class Gaussian(EuclideanDomain):
         assert omf_part in [1, i, -1, -i]
         unit = self / cls.Factorization(cls.int(1), powers).expand()
         return cls.Factorization(unit, powers)
+
+    def factor_favorite_associate(self):
+        if self == 0:
+            raise ZeroError()
+
+        #replace with the associate in the pos real and imaginary parts
+        return super().factor_favorite_associate()
 
 
 

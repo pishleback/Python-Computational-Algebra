@@ -2,6 +2,12 @@ import algebra
 import pyalgebra
 
 
+ZZ = algebra.base.ZZ
+QQ = algebra.base.ZZ.FractionField
+PolyZZ = algebra.polynomials.PolyOver(ZZ)
+PolyQQ = algebra.polynomials.PolyOver(QQ)
+QQ_bar = algebra.algebraic.Algebraic
+
 
 
 def test2():
@@ -10,12 +16,6 @@ def test2():
 ##    input()
     
     from fractions import Fraction as Frac
-    
-    ZZ = algebra.base.ZZ
-    QQ = algebra.base.ZZ.FractionField
-    PolyZZ = algebra.polynomials.PolyOver(ZZ)
-    PolyQQ = algebra.polynomials.PolyOver(QQ)
-    QQ_bar = algebra.algebraic.Algebraic
 
     x = PolyQQ.var()
     poly = x ** 16  - 1
@@ -57,7 +57,7 @@ def test2():
 
     
 
-def test1():
+def test1():    
     ZZ = algebra.base.ZZ
     QQ = algebra.base.ZZ.FractionField
     G = algebra.base.Gaussian
@@ -68,19 +68,26 @@ def test1():
     M = algebra.matricies.MatrixOver(QQ)
 
 
-    A = M(5, 5, [[3, 1, 0, 0, 0],
-                 [0, 3, 1, 0, 0],
-                 [0, 0, 3, 0, 0],
-                 [0, 0, 0, 5, 1],
-                 [0, 0, 0, 0, 5]])
+    A = M(7, 7, [[3, 1, 0, 0, 0, 0, 0],
+                 [0, 3, 1, 0, 0, 0, 0],
+                 [0, 0, 3, 0, 0, 0, 0],
+                 [0, 0, 0, 5, 1, 0, 0],
+                 [0, 0, 0, 0, 5, 0, 0],
+                 [0, 0, 0, 0, 0, 3, 1],
+                 [0, 0, 0, 0, 0, 0, 3]])
 
 
+##    A = M(3, 3, [[3, 5, 1],
+##                 [1, 6, 2],
+##                 [8, 7, 9]])
+
+    
 
     print(A)
     print(A.char_mat())
     print(A.char_mat().smith_normal_form())
-    print(A.min_poly())
-    print(A.char_poly())
+    print(A.min_poly().factor())
+    print(A.char_poly().factor())
     for root in QQbar.root_list(A.char_poly()):
         print(root)
 

@@ -275,6 +275,11 @@ def PolyOver(ring, var = "λ"):
                 m_factored = m.factor()
                 m_factored = type(self).Factorization(type(self).convert(m_factored.unit), {type(self).convert(irr) : p for irr, p in m_factored.powers.items()})
                 return m_factored * factor_primitive_kronekers(f)
+
+            def factor_favorite_associate(self):
+                if self == 0:
+                    raise base.ZeroError()
+                return self.factor_primitive()
                 
 
     if issubclass(ring, base.Field):
@@ -331,6 +336,15 @@ def PolyOver(ring, var = "λ"):
 
             def sqfree_part(self):
                 return self // type(self).gcd(self, self.derivative())
+
+            def factor_favorite_associate(self):
+                if self == 0:
+                    raise base.ZeroError()
+                u, assoc = self.factor_primitive_field()
+                #assoc is currently a polynomial over the base ring rather than the field
+                assoc = type(self).convert(assoc)
+                return u, assoc
+                
 
     return Poly
 
