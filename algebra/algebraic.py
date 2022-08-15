@@ -77,6 +77,9 @@ class _RealRep():
         self.a = a
         self.b = b
 
+    def __repr__(self):
+        return f"RealRep({self.poly}, {self.a} < x < {self.b})"
+
     def __str__(self):
         dp = 3
         while self.b - self.a > 10 ** (-dp-1):
@@ -245,6 +248,9 @@ class _ComplexRep():
                 return False
             return self - other == 0
         return False
+
+    def __repr__(self):
+        return f"ComplexRep({self.poly}, {self.a} < re < {self.b}, {self.c} < im < {self.d})"
 
     def __str__(self):
         dp = 3

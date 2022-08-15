@@ -65,6 +65,8 @@ def test1():
 
     QQbar = QQ.AlgebraicClosure
 
+    print(QQ.AlgebraicClosure is QQ.AlgebraicClosure)
+
     M = algebra.matricies.MatrixOver(QQ)
 
 
@@ -76,6 +78,9 @@ def test1():
                  [0, 0, 0, 0, 0, 3, 1],
                  [0, 0, 0, 0, 0, 0, 3]])
 
+    import random
+    U = M(7, 7, [[random.randint(-10, 10) for c in range(7)] for r in range(7)])
+    A = U * A * U ** -1
 
 ##    A = M(3, 3, [[3, 5, 1],
 ##                 [1, 6, 2],
@@ -84,12 +89,16 @@ def test1():
     
 
     print(A)
-    print(A.char_mat())
-    print(A.char_mat().smith_normal_form())
-    print(A.min_poly().factor())
-    print(A.char_poly().factor())
-    for root in QQbar.root_list(A.char_poly()):
-        print(root)
+    for x in A.eigen_val_list():
+        print(x, x.degree())
+    print("EIG SP")
+    for x, sp in A.eigen_col_spaces().items():
+        print(x)
+        print(sp)
+    print("GEN EIG SP")
+    for x, sp in A.general_eigen_col_spaces().items():
+        print(x)
+        print(sp)
 
     print(M)
 

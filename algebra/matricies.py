@@ -46,10 +46,18 @@ class NoSolution(Exception):
     pass
 
 
+
+class MatrixBase(base.MathsSet):
+    base_ring = None
+    def __init__(self, rows, cols):
+        self.rows = rows
+        self.cols = cols
+
+
 @functools.cache
 def MatrixOver(ring):
     assert issubclass(ring, base.Ring)
-    class Matrix(base.MathsSet):
+    class Matrix(MatrixBase):
         @classmethod
         def test_axioms(cls, test):
             super().test_axioms(test)
@@ -92,14 +100,31 @@ def MatrixOver(ring):
                 c = r
             return cls(r, c, [[0 for _ in range(c)] for _ in range(r)])
 
+        @classmethod
+        def init_cls(cls):
+            super().init_cls()
+            cls.base_ring = ring
+
+        @classmethod
+        def convert(cls, x):
+            try:
+                return super().convert(x)
+            except NotImplementedError:
+                pass
+
+            if isinstance(x, MatrixBase):
+                try:
+                    return cls(x.rows, x.cols, [[cls.base_ring.convert(x[r, c]) for c in range(x.cols)] for r in range(x.rows)])
+                except NotImplementedError:
+                    pass
+            raise NotImplementedError()
+
         def __init__(self, rows, cols, entries):
+            super().__init__(rows, cols)
             entries = tuple(tuple(ring.convert(x) for x in row) for row in entries)
             assert len(entries) == rows
             for row in entries:
                 assert len(row) == cols
-
-            self.rows = rows
-            self.cols = cols
             self.entries = entries
 
         def __getitem__(self, pos):
@@ -169,19 +194,61 @@ def MatrixOver(ring):
         def __eq__(self, other):
             if type(self) == type(other):
                 return self.equal(other)
+            try:
+                other = self.convert(other)
+            except NotImplementedError:
+                pass
+            else:
+                return self.equal(other)
             return False
         def __add__(self, other):
             if type(self) == type(other):
                 return self.add(other)
+            try:
+                other = self.convert(other)
+            except NotImplementedError:
+                pass
+            else:
+                return self.add(other)
+            return NotImplemented
+        def __radd__(self, other):
+            try:
+                other = self.convert(other)
+            except NotImplementedError:
+                pass
+            else:
+                return other.add(self)
             return NotImplemented
         def __neg__(self):
             return self.neg()
         def __sub__(self, other):
             if type(self) == type(other):
                 return self.add(other.neg())
+            try:
+                other = self.convert(other)
+            except NotImplementedError:
+                pass
+            else:
+                return self.add(other.neg())
+            return NotImplemented
+        def __rsub__(self, other):
+            if type(self) == type(other):
+                return other.add(self.neg())
+            try:
+                other = self.convert(other)
+            except NotImplementedError:
+                pass
+            else:
+                return other.add(self.neg())
             return NotImplemented
         def __mul__(self, other):
             if type(self) == type(other):
+                return self.mul(other)
+            try:
+                other = self.convert(other)
+            except NotImplementedError:
+                pass
+            else:
                 return self.mul(other)
             try:
                 other = ring.convert(other)
@@ -192,6 +259,12 @@ def MatrixOver(ring):
             return NotImplemented
         def __rmul__(self, other):
             if type(self) == type(other):
+                return other.mul(self)
+            try:
+                other = self.convert(other)
+            except NotImplementedError:
+                pass
+            else:
                 return other.mul(self)
             try:
                 other = ring.convert(other)
@@ -484,6 +557,7 @@ def MatrixOver(ring):
 
 
     if issubclass(ring, base.Field):
+        field = ring
         class Matrix(Matrix):
             @classmethod
             def change_of_basis_matrix(cls, A, B):
@@ -497,20 +571,32 @@ def MatrixOver(ring):
                 raise NotImplementedError()
 
             @functools.cache
+            def eigen_val_list(self):
+                return tuple(field.AlgebraicClosure.root_list(self.char_poly()))
+            @functools.cache
+            def eigen_val_powers(self):
+                return dict(field.AlgebraicClosure.root_powers(self.char_poly()))          
+
+            #for each eigen value a, the subspace of eigen vectors with eigen value a
+            @functools.cache
             def eigen_col_spaces(self):
-                raise NotImplementedError()
+                assert (n := self.rows) == self.cols
+                return {x : (self - MatrixOver(field.AlgebraicClosure).eye(n) * x).col_kernel() for x in self.eigen_val_powers().keys()}                             
             @functools.cache
             def eigen_row_spaces(self):
-                raise NotImplementedError()
+                assert (n := self.rows) == self.cols
+                return {x : (self - MatrixOver(field.AlgebraicClosure).eye(n) * x).row_kernel() for x in self.eigen_val_powers().keys()}
 
-            #these form a set of vectorspaces whose direct sum is F^n
+            #these form a set of vectorspaces whose direct sum is R^n
             @functools.cache
             def general_eigen_col_spaces(self):
-                raise NotImplementedError()
+                assert (n := self.rows) == self.cols
+                return {x : ((self - MatrixOver(field.AlgebraicClosure).eye(n) * x) ** p).col_kernel() for x, p in self.eigen_val_powers().items()}
             @functools.cache
             def general_eigen_row_spaces(self):
-                raise NotImplementedError()
-            
+                assert (n := self.rows) == self.cols
+                return {x : ((self - MatrixOver(field.AlgebraicClosure).eye(n) * x) ** p).row_kernel() for x, p in self.eigen_val_powers().items()}
+
             @functools.lru_cache()
             def jordan_algorithm_unordered(self):
                 #compute jordan blocks and change of basis matrices for each block

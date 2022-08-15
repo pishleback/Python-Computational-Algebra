@@ -531,7 +531,7 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
     def FractionFieldCls(cls):
         ring = cls
         class FractionField(Field):
-            @classmethod
+            @cached_classmethod
             def AlgebraicClosureCls(cls):
                 from algebra import polynomials
 
@@ -570,6 +570,9 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
                         def __init__(self, rep):
                             assert type(rep) in {Frac, algebraic._RealRep, algebraic._ComplexRep}
                             self.rep = rep
+
+                        def __repr__(self):
+                            return f"QQbar({repr(self.rep)})"
                             
                         def __str__(self):
                             return str(self.rep)
@@ -591,7 +594,10 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
                             assert (cls := type(self)) == type(other)
                             return cls(self.rep * other.rep)
                         def recip(self):
-                            return type(self)(self.rep.recip())
+                            if type(self.rep) == Frac:
+                                return type(self)(1 / self.rep)
+                            else:
+                                return type(self)(self.rep.recip())
                         
                     ##    def floor(self):
                     ##        return self.rep.floor()
@@ -635,11 +641,6 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
                 return list(set([cls(v, 2) for v in ringvals[3:]] + [cls(1, v) for v in ringvals[3:6] if v != 0] + [cls.int(0) + cls.int(1)]))
 
             @classmethod
-            def init_cls(cls):
-                super().init_cls()
-                cls.fraction_ring = ring
-
-            @classmethod
             def convert(cls, x):
                 try:
                     return super().convert(x)
@@ -653,6 +654,11 @@ class EuclideanDomain(PrincipalIdealDomain, metaclass = EuclideanDomainType):
             @classmethod
             def int(cls, n):
                 return cls(n, 1)
+
+            @classmethod
+            def init_cls(cls):
+                super().init_cls()
+                cls.fraction_ring = ring
             
             def __init__(self, n, d):
                 n = ring.convert(n)
