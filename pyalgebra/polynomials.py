@@ -694,8 +694,10 @@ def test():
         p = [Frac(x.p, x.q) for x in reversed(list(p.all_coeffs()))]
         #p = [Frac(int(x.numerator), int(x.denominator)) for x in reversed(list(p.all_coeffs()))]
         return p
-##    p = symbol_poly(lambda x : x ** 5 - x + 1)
+    p = symbol_poly(lambda x : x ** 5 - x - 1)
 ##    p = symbol_poly(lambda x : 61 - 273 * x + 305 * x ** 2 + x ** 3) #reeeeeeeally close roots on this one
+    
+    
 ##    p = symbol_poly(lambda x : x ** 12 - 3 * x ** 5 + 6 * x ** 2 - x + 1)
 ##    p = symbol_poly(lambda x : x ** 12 - x ** 11 - 2)
 ##    import random

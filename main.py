@@ -6,6 +6,8 @@ import pyalgebra
 
 def test2():
 ##    pyalgebra.polynomials.test()
+##
+##    input()
     
     from fractions import Fraction as Frac
     
@@ -16,11 +18,13 @@ def test2():
     QQ_bar = algebra.algebraic.Algebraic
 
     x = PolyQQ.var()
-    poly = (x**2 - 2) ** 2
+    poly = x ** 16  - 1
 
+    for f in poly.factor().list():
+        print(f)
 
     for a, k in QQ.AlgebraicClosure.root_powers(poly):
-        print(QQ.int(1) + a, k)
+        print(k, a, a.degree())
 
 ##    x = PolyZZ.var()
 ##
@@ -64,10 +68,11 @@ def test1():
     M = algebra.matricies.MatrixOver(QQ)
 
 
-    A = M(4, 4, [[1, 1, 1, 1],
-                 [0, 1, 1, 1],
-                 [0, 0, 2, 1],
-                 [0, 0, 0, 1]])
+    A = M(5, 5, [[3, 1, 0, 0, 0],
+                 [0, 3, 1, 0, 0],
+                 [0, 0, 3, 0, 0],
+                 [0, 0, 0, 5, 1],
+                 [0, 0, 0, 0, 5]])
 
 
 
