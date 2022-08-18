@@ -193,7 +193,8 @@ class _RealRep():
             self.b = m
             self.at_b = at_m
 
-def RealRep(poly, a, b):
+
+def RealRep(poly, a, b):    
     ra = pyalgebra.polynomials.rational_real_root(a)
     rb = pyalgebra.polynomials.rational_real_root(b)
     polys = list(poly.factor().powers.keys())
@@ -399,7 +400,7 @@ class _ComplexRep():
             else:
                 return ans
 
-    def refine(self):
+    def refine(self):        
         def pick(box1, box2):
             if pyalgebra.polynomials.count_complex_roots([int(c) for c in self.poly.rep], *box1) == 1:
                 return box1

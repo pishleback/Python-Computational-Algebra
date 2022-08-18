@@ -526,20 +526,40 @@ def MatrixOver(ring):
         def col_kernel(self):
             return self.transpose().row_kernel().transpose()
 
-        def col_solve(self, vec):
-            #solve self * x = vec for x
+        def col_solve(self, vec, space = None):
+            #solve self * x = vec for x in space (if specified)
+            #a better approach would be to have a col_sol_space function and a class for affine spaces which we can sample from
             assert self.cols == vec.rows and vec.cols == 1
-            U, det_U, pivots, H = self.hermite_algorithm()
+            if space is None:
+                space = type(self).eye(self.cols).col_span()
+            assert type(space) == SpanOver(ring)
+            assert space.rows == self.cols
+            assert space.cols == 1
+##            U, det_U, pivots, H = self.hermite_algorithm()
+
+            #extend space to include an extra coordiate for the multiple of vec we obtain
+            extended_space = type(self).join_cols([type(self).join_rows([b, type(self)(1, 1, [[0]])]) for b in space.basis] + [type(self)(self.cols + 1, 1, [[0]] * self.cols + [[1]])]).col_span()
             
+            #matrix whose kernel is closely related to solutions - need the last component to be 1 for a solution
             mat = type(self).join_cols([self.col(c) for c in range(self.cols)] + [-vec])
-            ker_basis = mat.col_kernel().basis
-            g, coeffs = ring.xgcd_list([b[self.cols, 0] for b in ker_basis])
+            sol_sp = mat.col_kernel() & extended_space
+            sol_sp_basis = sol_sp.basis
+            g, coeffs = ring.xgcd_list([b[self.cols, 0] for b in sol_sp_basis])
             if g.is_unit():
                 coeffs = [c / g for c in coeffs]
             else:
+                print(mat.col_kernel())
+                print(extended_space)
+                print(sol_sp)
+                print(sol_sp.dimention())
+                print(g)
+                print(coeffs)
+                print(self)
+                print(vec)
+                print(space)
                 raise NoSolution("No solution")
 
-            sol = Matrix.sum(self.cols + 1, 1, [coeffs[i] * ker_basis[i] for i in range(len(ker_basis))])
+            sol = Matrix.sum(self.cols + 1, 1, [coeffs[i] * sol_sp_basis[i] for i in range(len(sol_sp_basis))])
             sol = sol.minor(row = self.cols)
             assert self * sol == vec
             return sol
@@ -555,20 +575,42 @@ def MatrixOver(ring):
         def char_poly(self):
             return polynomials.PolyOver(ring).product(self.char_mat().smith_diagonal())
 
+        
+        def split_block_diag(self, row_sizes, col_sizes):
+            #return the diagonal submatricies with the given row and column sizes
+            assert all([type(n) == int and n >= 1 for n in row_sizes])
+            assert all([type(n) == int and n >= 1 for n in col_sizes])
+            assert sum(row_sizes) == self.rows
+            assert sum(col_sizes) == self.cols
+            assert (n := len(row_sizes)) == len(col_sizes)
+            blocks = []
+            for i in range(n):
+                x, y = sum(row_sizes[:i]), sum(col_sizes[:i])
+                h, w = row_sizes[i], col_sizes[i]
+                blocks.append(Matrix(h, w, [[self[x + r, y + c] for c in range(w)] for r in range(h)]))
+            return blocks
+
 
     if issubclass(ring, base.Field):
         field = ring
         class Matrix(Matrix):
             @classmethod
             def change_of_basis_matrix(cls, A, B):
+                #find basis matrix P (if it exists) such that P ** -1 * self * P == other
+                assert cls == type(A) == type(B)
                 assert (n := A.rows) == A.rows == B.cols == B.cols
-                #find change of basis matrix M such that AM = MB
-
                 #plan:
                 #put both A and B into jcf.
                 #if jcf disagree, no such M exists
                 #if jcf agree, compose change of basis matricies for jcf
-                raise NotImplementedError()
+                
+                if (e_vals := set(A.eigen_val_list())) == set(B.eigen_val_list()):
+                    if A.jordan_type() == B.jordan_type():
+                        e_vals = list(e_vals) #fix order
+                        A_basis = A.jordan_ordered_basis(e_vals)
+                        B_basis = B.jordan_ordered_basis(e_vals)
+                        return B_basis * A_basis ** -1
+                raise Exception(f"{repr(A)} and {repr(B)} are not similar matricies")
 
             @functools.cache
             def eigen_val_list(self):
@@ -597,173 +639,108 @@ def MatrixOver(ring):
                 assert (n := self.rows) == self.cols
                 return {x : ((self - MatrixOver(field.AlgebraicClosure).eye(n) * x) ** p).row_kernel() for x, p in self.eigen_val_powers().items()}
 
-            @functools.lru_cache()
-            def jordan_algorithm_unordered(self):
-                #compute jordan blocks and change of basis matrices for each block
-                raise NotImplementedError()
-
-            def jordan_algorithm_ordered(self, eigen_value_order = None):
-                if eigen_value_order is None:
-                    pass
-                raise NotImplementedError()
-
-            def jordan_canonical_form(self, eigen_value_order = None):
-                raise NotImplementedError()
-
-    if False:
-        #old implementation
-        #use this to write jcf stuff
-        class OldEigenMatrix(Matrix):            
             @functools.cache
-            def eigen_val_list(self):
-                return tuple(self.char_poly().roots())
-            @functools.cache
-            def eigen_val_powers(self):
-                eigen_values = {}
-                for x in self.eigen_val_list():
-                    if not x in eigen_values:
-                        eigen_values[x] = 0
-                    eigen_values[x] += 1
-                return eigen_values
-
-            @functools.cache
-            def eigen_col_spaces(self):
-                algcls = polycls.algcls
+            def jordan_algorithm(self):
+                #for each eigen value, compute a list of list of vectors
+                #self should act on these vectors in the same way the blocks of a jcf matrix act on standard basis vectors
+                
                 assert (n := self.rows) == self.cols
-                return {x : (self._lift_weird(algcls, self.polycls.as_root) - MatrixOver(algcls).Identity(n) * x).col_kernel() for x in self.eigen_val_list()}                             
-            @functools.cache
-            def eigen_row_spaces(self):
-                algcls = polycls.algcls
-                assert (n := self.rows) == self.cols
-                return {x : (self._lift_weird(algcls, self.polycls.as_root) - MatrixOver(algcls).Identity(n) * x).row_kernel() for x in self.eigen_val_list()}
-
-            #these form a set of vectorspaces whose direct sum is R^n
-            @functools.cache
-            def general_eigen_col_spaces(self):
-                algcls = polycls.algcls
-                assert (n := self.rows) == self.cols
-                return {x : ((self._lift_weird(algcls, self.polycls.as_root) - MatrixOver(algcls).Identity(n) * x) ** p).col_kernel() for x, p in self.eigen_val_powers().items()}
-            @functools.cache
-            def general_eigen_row_spaces(self):
-                algcls = polycls.algcls
-                assert (n := self.rows) == self.cols
-                return {x : ((self._lift_weird(algcls, self.polycls.as_root) - MatrixOver(algcls).Identity(n) * x) ** p).row_kernel() for x, p in self.eigen_val_powers().items()}
-
-            @functools.cache
-            def _jcf_info(self):
-                assert (n := self.rows) == self.cols
-                algcls = polycls.algcls
-
                 e_vals = list(set(self.eigen_val_list()))
                 e_pows = self.eigen_val_powers()
                 e_gesp = self.general_eigen_col_spaces()
 
                 #first find basis where T is block diagonal & each block has a single eigen value
-                T = self._lift_weird(algcls, self.polycls.as_root)
+                T = MatrixOver(field.AlgebraicClosure).convert(self)
 
                 basis = []
                 for x in e_vals:
                     basis.extend(e_gesp[x].basis)
-                B = MatrixOver(algcls).join_cols(basis)
+                B = MatrixOver(field.AlgebraicClosure).join_cols(basis)
                 assert n == B.rows == B.cols
-                T_B = B ** -1 * T * B
+                T_B = B ** -1 * T * B #block diagonal, one block for each general eigen space
                 E_blocks = T_B.split_block_diag([e_pows[x] for x in e_vals], [e_pows[x] for x in e_vals])
                 block_info = {}
                 for idx in range(len(e_vals)):
-                    T = E_blocks[idx]
-                    x = e_vals[idx]
-                    n = e_pows[x]
+                    T = E_blocks[idx] #matrix for one eigen value
+                    x = e_vals[idx] #the eigen value
+                    n = e_pows[x] #the dimension
                     #now we are reduced to finding JCF of T with all eigen values equal to x
-                    S = T - MatrixOver(algcls).Identity(n) * x
-                    #S has e.val 0 repeated n times, can then use its kernel
+                    S = T - MatrixOver(field.AlgebraicClosure).eye(n) * x
+                    #now S has eigen value 0 repeated n times, can then use its kernel
 
                     def get_S_jcf_bases(S, V):
                         #return a jcf basis of S acting on V
-                        n = V.dimention
+                        n = V.dimention()
                         if n == 0:
                             return []
-                        if n == 1:
-                            return [[V.basis[0]]]
-                        else:
+                        elif n == 1:
+                            v = V.basis[0]
+                            return [[v]]
+                        else:                            
                             new_vecs = [] #keep track of the vectors we add this time round
                             
                             #let W be the image of S acting on V
                             W = S * V
                             #dim W is less than dim V since S has an eigen value of 0 - some direction gets sent to 0
-                            assert W.dimention < V.dimention
+                            assert W.dimention() < V.dimention()
                             #new find the jcf basis of S acting on W
                             W_bases = get_S_jcf_bases(S, W)
                             #now extend to a basis of V by:
-                            #1) adding the preimages of each previous W_basis vector under S
-                            #2) extending what is left to include ker(S)
 
                             V_bases = [[w for w in W_basis] for W_basis in W_bases]
-                            #1)
+                            #1) adding the preimages of each previous W_basis vector under S
                             for i in range(len(W_bases)):
                                 w = W_bases[i][-1]
-                                V_bases[i].append(S.col_solve(w, V))
+                                v = S.col_solve(w, V)
+                                V_bases[i].append(v)
 
-                            #2)                        
-                            S_ker = S.col_kernel()
+
+                            #2) extending what is left to include ker(S)
+                            extra = V & S.col_kernel()
                             #this is the extra stuff which needs to be added to extend the basis to one of ker S too
                             #should add stuff from ker(S) which is in V but not in W. ie the stuff S sends straight to 0 from V / W
-                            extra = V & S_ker
                             for new_vec in (extra & (extra & W).compliment()).basis:
                                 V_bases.append([new_vec])
 
                             return V_bases
 
-                    S_jcf_bases = get_S_jcf_bases(S, MatrixOver(algcls).Identity(n).col_span())
+                    S_jcf_bases = get_S_jcf_bases(S, MatrixOver(field.AlgebraicClosure).eye(n).col_span())
+                    
                     assert sum(len(basis) for basis in S_jcf_bases) == n
                     block_info[x] = S_jcf_bases
-                return block_info #e.val -> jcf basis for that block
+                #block_info is e.val -> jcf basis for that block
+                return B, block_info
 
-            def _jcf_ordered_basis(self, e_vals):                
+            def jordan_type(self):
+                #return {eig_val : (block, sizes, in, ascending, order)}
+                _, jordan_vecs = self.jordan_algorithm()
+                return {x : tuple(sorted([len(vs) for vs in vecs])) for x, vecs in jordan_vecs.items()}
+
+            def jordan_ordered_basis(self, eigen_value_order):                
                 #return a basis which puts the matrix into JCF
                 #with the blocks in the order given by e_vals
-                assert len(set(e_vals)) == len(e_vals)
-                assert len(e_vals) == len(set(self.eigen_val_list()))
-                algcls = polycls.algcls
+                if eigen_value_order is None:
+                    eigen_value_order = list(set(self.eigen_val_list()))
+                assert len(set(eigen_value_order)) == len(eigen_value_order)
+                assert len(eigen_value_order) == len(set(self.eigen_val_list()))
 
-                e_gesp = self.general_eigen_col_spaces()
-                basis = []
-                for x in e_vals:
-                    basis.extend(e_gesp[x].basis)
-                B1 = MatrixOver(algcls).join_cols(basis)
-
-                block_info = self._jcf_info()
-                B2 = MatrixOver(algcls).join_diag([MatrixOver(algcls).join_cols(sum([list(basis) for basis in block_info[x]], [])) for x in e_vals])
+                B1, block_info = self.jordan_algorithm()
+                B2 = MatrixOver(field.AlgebraicClosure).join_diag([MatrixOver(field.AlgebraicClosure).join_cols(sum([list(basis) for basis in block_info[x]], [])) for x in eigen_value_order])
                 return B1 * B2
 
-            @functools.cache
-            def jcf_basis(self):                
-                return self._jcf_ordered_basis(list(set(self.eigen_val_list())))
+            def jordan_basis(self):                
+                return self.jordan_ordered_basis(list(set(self.eigen_val_list())))
 
-            @functools.cache
-            def jcf(self):
-                algcls = polycls.algcls
-                T = self._lift_weird(algcls, self.polycls.as_root)
-                B = self.jcf_basis()
+            def jordan_canonical_form(self, eigen_value_order = None):
+                e_vals_repeated = self.eigen_val_list()
+                if eigen_value_order is None:
+                    eigen_value_order = list(set(e_vals_repeated))
+##                if len(eigen_value_order) == len(e_vals_repeated):
+##                    return MatrixOver(field.AlgebraicClosure).join_diag([MatrixOver(field.AlgebraicClosure)(1, 1, [[x]]) for x in eigen_value_order])
+                T = MatrixOver(field.AlgebraicClosure).convert(self)
+                B = self.jordan_ordered_basis(eigen_value_order)
                 return B ** -1 * T * B
-
-            def similar_basis(self, other):
-                #find basis matrix P (if it exists) such that P ** -1 * self * P == other
-                assert type(self) == type(other)
-                assert (n := self.rows) == other.rows == self.cols == other.cols
-                assert (e_vals := set(self.eigen_val_list())) == set(other.eigen_val_list())
-                #find a basis so that self looks like other
-                #find jcf basis for each such that the jcf is identical for each
-                #algorithm always puts largest block first
-                #just need to reorder eigen values if necessary
-                e_vals = list(e_vals) #fix order
-
-                self_B = self._jcf_ordered_basis(e_vals)
-                other_B = other._jcf_ordered_basis(e_vals)
-
-                return self_B * other_B ** -1
-
                 
-            
     return Matrix
     
 
@@ -778,10 +755,8 @@ def SpanOver(ring):
     assert issubclass(ring, base.Ring)
     Matrix = MatrixOver(ring)
 
-    def mat_to_row(rows, cols, mat):
-        assert mat.rows == rows
-        assert mat.cols == cols
-        return Matrix(1, cols * rows, [[mat[i % rows, i // rows] for i in range(cols * rows)]])
+    def mat_to_row(mat):
+        return Matrix(1, mat.cols * mat.rows, [[mat[i % mat.rows, i // mat.rows] for i in range(mat.cols * mat.rows)]])
 
     def row_to_mat(rows, cols, row_mat):
         assert row_mat.cols == rows * cols
@@ -803,7 +778,7 @@ def SpanOver(ring):
             if len(matricies) == 0:
                 self.basis = tuple([])
             else:
-                _, _, pivs, H = Matrix.join_rows([mat_to_row(self.rows, self.cols, mat) for mat in matricies]).hermite_algorithm()
+                _, _, pivs, H = Matrix.join_rows([mat_to_row(mat) for mat in matricies]).hermite_algorithm()
                 self.basis = tuple(row_to_mat(self.rows, self.cols, H.row(i)) for i in range(len(pivs)))
         def __str__(self):
             if len(self.basis) == 0:
@@ -838,7 +813,7 @@ def SpanOver(ring):
         def __and__(self, other):
             if (cls := type(self)) == type(other):
                 if (rows := self.rows) == other.rows and (cols := self.cols) == other.cols:
-                    metamatrix = Matrix.join_rows([mat_to_row(self.rows, self.cols, mat) for mat in self.basis] + [mat_to_row(other.rows, other.cols, mat) for mat in other.basis])
+                    metamatrix = Matrix.join_rows([mat_to_row(mat) for mat in self.basis] + [mat_to_row(mat) for mat in other.basis])
                     ker = metamatrix.row_kernel()
 
                     basis_rows = []
@@ -875,6 +850,43 @@ def SpanOver(ring):
                 raise Exception("No elements to sample from")
             else:
                 return self.basis[0]
+
+        def compliment(self):
+            #https://math.stackexchange.com/questions/465870/how-to-extend-a-basis
+            assert issubclass(ring, base.Field)
+            eye = MatrixOver(ring).eye(self.rows * self.cols)
+            vecs = [mat_to_row(b) for b in self.basis] + [eye.row(i) for i in range(self.rows * self.cols)]
+            #perform sifting on vecs (could make sifting a seperate method somewhere?)
+
+            idx = 0
+            while idx < len(vecs):
+                mat = MatrixOver(ring).join_rows(vecs[:idx+1])
+                if mat.rank() != idx+1: #are vecs[:idx+1] linearly dependent?
+                    vecs.pop(idx)
+                idx += 1
+
+            #remove the vectors from our basis
+            #we are left with a complimentary basis
+            vecs = vecs[self.dimention():]
+            
+            ans = type(self)(self.rows, self.cols, [row_to_mat(self.rows, self.cols, vec) for vec in vecs])
+            return ans
+            
+##            #find a subspace such that self + comp = everything and self & comp = 0
+##            #THIS ONLY WORKS OVER FIELDS CONTAINED IN R :(
+##            if self.dimention() == 0:
+##                def b(i):
+##                    vals = [0] * self.rows * self.cols
+##                    vals[i] = 1
+##                    return vals
+##                basis = [row_to_mat(self.rows, self.cols, MatrixOver(ring)(1, self.rows * self.cols, [b(i)])) for i in range(self.rows * self.cols)]
+##            else:
+##                metamatrix = MatrixOver(ring).join_rows([mat_to_row(mat) for mat in self.basis])
+##                basis = [row_to_mat(self.rows, self.cols, b) for b in metamatrix.transpose().row_kernel().basis]
+##            comp = type(self)(self.rows, self.cols, basis)
+##            assert (self & comp).dimention() == 0
+##            assert (self + comp).dimention() == self.rows * self.cols
+##            return comp
 
         def transpose(self):
             return type(self)(self.cols, self.rows, [mat.transpose() for mat in self.basis])

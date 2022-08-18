@@ -69,38 +69,25 @@ def test1():
 
     M = algebra.matricies.MatrixOver(QQ)
 
+    A = M(4, 4, [[0, -1, 1, 1],
+                 [1, 0, 1, 1],
+                 [0, 0, 0, -1],
+                 [0, 0, 1, 0]])
 
-    A = M(7, 7, [[3, 1, 0, 0, 0, 0, 0],
-                 [0, 3, 1, 0, 0, 0, 0],
-                 [0, 0, 3, 0, 0, 0, 0],
-                 [0, 0, 0, 5, 1, 0, 0],
-                 [0, 0, 0, 0, 5, 0, 0],
-                 [0, 0, 0, 0, 0, 3, 1],
-                 [0, 0, 0, 0, 0, 0, 3]])
 
-    import random
-    U = M(7, 7, [[random.randint(-10, 10) for c in range(7)] for r in range(7)])
-    A = U * A * U ** -1
 
-##    A = M(3, 3, [[3, 5, 1],
-##                 [1, 6, 2],
-##                 [8, 7, 9]])
+##    A = M(3, 3, [[1, 0, 0],
+##                 [1, 0, 0],
+##                 [1, 0, 0]])
+##
+##    print(A.col_span().compliment())
 
     
 
     print(A)
     for x in A.eigen_val_list():
-        print(x, x.degree())
-    print("EIG SP")
-    for x, sp in A.eigen_col_spaces().items():
-        print(x)
-        print(sp)
-    print("GEN EIG SP")
-    for x, sp in A.general_eigen_col_spaces().items():
-        print(x)
-        print(sp)
-
-    print(M)
-
+        print(x, x.degree(), x.min_poly())
+    print(A.jordan_canonical_form())
+    
 
 test1()
