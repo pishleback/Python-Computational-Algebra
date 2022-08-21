@@ -88,6 +88,43 @@ def test1():
     for x in A.eigen_val_list():
         print(x, x.degree(), x.min_poly())
     print(A.jordan_canonical_form())
+
+
+def test3():
+    ZZ = algebra.base.ZZ
+    QQ = algebra.base.ZZ.FractionField
+    QQbar = QQ.AlgebraicClosure
+
+    M = algebra.matricies.MatrixOver(QQ)
+    SP = algebra.matricies.AffineSubspaceOver(ZZ)
+    
+    A = M(4, 4, [[2, 0, 0, 0],
+                 [0, 2, 0, 0],
+                 [0, 0, 2, 0],
+                 [0, 0, 0, 2]])
+##    V = M(4, 1, [[1],
+##                 [1],
+##                 [1],
+##                 [1]])
+##    S = SP(4, 1, V, A.col_list())
+##    print(S)
+##    
+    B = M(4, 4, [[1, 0, 0, 0],
+                 [0, 1, 0, 0],
+                 [0, 0, 1, 0],
+                 [0, 0, 0, 1]])
+##    W = M(4, 1, [[1],
+##                 [1],
+##                 [1],
+##                 [1]])
+##    T = SP(4, 1, W, B.col_list()) 
+##    print(T)
+    
+    print(A.col_span())
+    print(B.col_span())
+    print(A.col_span() == B.col_span())
+
+    
     
 
-test1()
+test3()
