@@ -9,18 +9,13 @@ import itertools
 #put numbers into a matrix
 
 #==OVER AN ED==
-#=SPAN= (ModuleSpan)
-#objects are submodules
-#=QUOTIENT= (ModuleQuotient)
-#objects are elements mod submodules
-#isomorphism type from smith normal form (SNF)
+#=Hermite algorithm=
+#=Smith algorithm=
+#=Linear Subspace=
+#=Affine Subspace=
 
-#==OVER A FIELD== (SPECIAL CASE OF ED)
-#=SPAN= (VectorSpan)
-#objects are subspaces
-#=quotient= (VectorQuotient)
-#QUOTIENT are vectors mod subspace
-#isomorphism type from dimention = how many diagonal entries in the SNF
+#==OVER A FIELD==
+#=Jordan algorithm=
 
 #===APPLICATIONS===
 #homology
@@ -300,6 +295,12 @@ def MatrixOver(ring):
             return type(self)(1, self.cols, [self.entries[r]])
         def col(self, c):
             return self.transpose().row(c).transpose()
+
+        def row_list(self):
+            return [self.row(r) for r in range(self.rows)]
+        def col_list(self):
+            return [self.col(c) for c in range(self.cols)]
+        
         def minor(self, row = None, col = None):
             return type(self)(self.rows if row is None else self.rows - 1, self.cols if col is None else self.cols - 1, [[self[r, c] for c in range(self.cols) if c != col] for r in range(self.rows) if r != row])
 
@@ -517,12 +518,12 @@ def MatrixOver(ring):
             return ring.product([H[i, i] for i in range(n)]) / det_U
 
         def row_span(self):
-            return SpanOver(ring)(1, self.cols, [self.row(r) for r in range(self.rows)])
+            return LinearSubspaceOver(ring)(1, self.cols, [self.row(r) for r in range(self.rows)])
         def col_span(self):
-            return SpanOver(ring)(self.rows, 1, [self.col(c) for c in range(self.cols)])
+            return LinearSubspaceOver(ring)(self.rows, 1, [self.col(c) for c in range(self.cols)])
         def row_kernel(self):
             U, _, pivs, H = self.hermite_algorithm()
-            return SpanOver(ring)(1, self.rows, [U.row(r) for r in range(len(pivs), self.rows)])
+            return LinearSubspaceOver(ring)(1, self.rows, [U.row(r) for r in range(len(pivs), self.rows)])
         def col_kernel(self):
             return self.transpose().row_kernel().transpose()
 
@@ -532,7 +533,7 @@ def MatrixOver(ring):
             assert self.cols == vec.rows and vec.cols == 1
             if space is None:
                 space = type(self).eye(self.cols).col_span()
-            assert type(space) == SpanOver(ring)
+            assert type(space) == LinearSubspaceOver(ring)
             assert space.rows == self.cols
             assert space.cols == 1
 ##            U, det_U, pivots, H = self.hermite_algorithm()
@@ -548,15 +549,6 @@ def MatrixOver(ring):
             if g.is_unit():
                 coeffs = [c / g for c in coeffs]
             else:
-                print(mat.col_kernel())
-                print(extended_space)
-                print(sol_sp)
-                print(sol_sp.dimention())
-                print(g)
-                print(coeffs)
-                print(self)
-                print(vec)
-                print(space)
                 raise NoSolution("No solution")
 
             sol = Matrix.sum(self.cols + 1, 1, [coeffs[i] * sol_sp_basis[i] for i in range(len(sol_sp_basis))])
@@ -663,14 +655,14 @@ def MatrixOver(ring):
                 for idx in range(len(e_vals)):
                     T = E_blocks[idx] #matrix for one eigen value
                     x = e_vals[idx] #the eigen value
-                    n = e_pows[x] #the dimension
+                    n = e_pows[x] #the rank
                     #now we are reduced to finding JCF of T with all eigen values equal to x
                     S = T - MatrixOver(field.AlgebraicClosure).eye(n) * x
                     #now S has eigen value 0 repeated n times, can then use its kernel
 
                     def get_S_jcf_bases(S, V):
                         #return a jcf basis of S acting on V
-                        n = V.dimention()
+                        n = V.rank()
                         if n == 0:
                             return []
                         elif n == 1:
@@ -682,7 +674,7 @@ def MatrixOver(ring):
                             #let W be the image of S acting on V
                             W = S * V
                             #dim W is less than dim V since S has an eigen value of 0 - some direction gets sent to 0
-                            assert W.dimention() < V.dimention()
+                            assert W.rank() < V.rank()
                             #new find the jcf basis of S acting on W
                             W_bases = get_S_jcf_bases(S, W)
                             #now extend to a basis of V by:
@@ -731,12 +723,18 @@ def MatrixOver(ring):
             def jordan_basis(self):                
                 return self.jordan_ordered_basis(list(set(self.eigen_val_list())))
 
-            def jordan_canonical_form(self, eigen_value_order = None):
+            def jordan_canonical_form(self, eigen_value_order = None, method = "find_basis"):
+                assert method in {"optimized", "find_basis"}                
+                
                 e_vals_repeated = self.eigen_val_list()
                 if eigen_value_order is None:
                     eigen_value_order = list(set(e_vals_repeated))
-##                if len(eigen_value_order) == len(e_vals_repeated):
-##                    return MatrixOver(field.AlgebraicClosure).join_diag([MatrixOver(field.AlgebraicClosure)(1, 1, [[x]]) for x in eigen_value_order])
+
+                if method == "optimized":
+                    #if all eigen values are distinct, the jcf is the diagonal matrix of eigen values (in the provided order)
+                    if len(eigen_value_order) == len(e_vals_repeated):
+                        return MatrixOver(field.AlgebraicClosure).join_diag([MatrixOver(field.AlgebraicClosure)(1, 1, [[x]]) for x in eigen_value_order])
+                    
                 T = MatrixOver(field.AlgebraicClosure).convert(self)
                 B = self.jordan_ordered_basis(eigen_value_order)
                 return B ** -1 * T * B
@@ -751,7 +749,7 @@ def MatrixOver(ring):
 
 
 @functools.cache
-def SpanOver(ring):
+def LinearSubspaceOver(ring):
     assert issubclass(ring, base.Ring)
     Matrix = MatrixOver(ring)
 
@@ -763,7 +761,7 @@ def SpanOver(ring):
         assert row_mat.rows == 1
         return Matrix(rows, cols, [[row_mat[0, r + c * rows] for c in range(cols)] for r in range(rows)])
     
-    class Span():
+    class LinearSubspace():
         def __init__(self, rows, cols, matricies):
             assert type(rows) == int and rows >= 0
             assert type(cols) == int and rows >= 0
@@ -780,6 +778,7 @@ def SpanOver(ring):
             else:
                 _, _, pivs, H = Matrix.join_rows([mat_to_row(mat) for mat in matricies]).hermite_algorithm()
                 self.basis = tuple(row_to_mat(self.rows, self.cols, H.row(i)) for i in range(len(pivs)))
+                
         def __str__(self):
             if len(self.basis) == 0:
                 return "{0}"
@@ -797,7 +796,19 @@ def SpanOver(ring):
                         rows[r] += mat_str_rows[r]
                 return "\n".join(rows)
         def __repr__(self):
-            return "Span(" + ", ".join(repr(mat) for mat in self.basis) + ")"
+            return "LinearSubspace(" + ", ".join(repr(mat) for mat in self.basis) + ")"
+
+        def __eq__(self, other):
+            if type(self) == type(other):
+                if (rank := self.rank()) == other.rank():
+                    raise NotImplementedError()
+            return False
+
+        def __contains__(self, other):
+            if type(other) == Matrix:
+                if other.rows == self.rows and other.cols == self.cols:
+                    raise NotImplementedError()
+            return False
 
         def __add__(self, other):
             if (cls := type(self)) == type(other):
@@ -819,8 +830,8 @@ def SpanOver(ring):
                     basis_rows = []
                     for coeffs in ker.basis:
                         basis_row = Matrix.zero(1, metamatrix.cols)                    
-                        assert coeffs.cols == self.dimention() + other.dimention()
-                        for i in range(0, self.dimention()):
+                        assert coeffs.cols == self.rank() + other.rank()
+                        for i in range(0, self.rank()):
                             basis_row += coeffs[0, i] * metamatrix.row(i)
                         basis_rows.append(basis_row)
 
@@ -832,7 +843,7 @@ def SpanOver(ring):
                 if other.rows == self.cols:
                     return type(self)(self.rows, other.cols, [mat * other for mat in self.basis])
                 else:
-                    raise Exception("Dimentions don't match for Span * Mat")
+                    raise Exception("Dimentions don't match for LinearSubspace * Mat")
             return NotImplemented
 
         def __rmul__(self, other):
@@ -840,13 +851,13 @@ def SpanOver(ring):
                 if other.cols == self.rows:
                     return type(self)(other.rows, self.cols, [other * mat for mat in self.basis])
                 else:
-                    raise Exception("Dimentions don't match for Mat * Span")
+                    raise Exception("Dimentions don't match for Mat * LinearSubspace")
             return NotImplemented
 
-        def dimention(self):
+        def rank(self):
             return len(self.basis)
         def sample(self):
-            if self.dimention == 0:
+            if self.rank == 0:
                 raise Exception("No elements to sample from")
             else:
                 return self.basis[0]
@@ -854,44 +865,130 @@ def SpanOver(ring):
         def compliment(self):
             #https://math.stackexchange.com/questions/465870/how-to-extend-a-basis
             assert issubclass(ring, base.Field)
-            eye = MatrixOver(ring).eye(self.rows * self.cols)
+            eye = Matrix.eye(self.rows * self.cols)
             vecs = [mat_to_row(b) for b in self.basis] + [eye.row(i) for i in range(self.rows * self.cols)]
             #perform sifting on vecs (could make sifting a seperate method somewhere?)
 
             idx = 0
             while idx < len(vecs):
-                mat = MatrixOver(ring).join_rows(vecs[:idx+1])
+                mat = Matrix.join_rows(vecs[:idx+1])
                 if mat.rank() != idx+1: #are vecs[:idx+1] linearly dependent?
                     vecs.pop(idx)
                 idx += 1
 
             #remove the vectors from our basis
             #we are left with a complimentary basis
-            vecs = vecs[self.dimention():]
+            vecs = vecs[self.rank():]
             
             ans = type(self)(self.rows, self.cols, [row_to_mat(self.rows, self.cols, vec) for vec in vecs])
             return ans
             
 ##            #find a subspace such that self + comp = everything and self & comp = 0
-##            #THIS ONLY WORKS OVER FIELDS CONTAINED IN R :(
-##            if self.dimention() == 0:
+##            #REMOVED BECAUSE THIS ONLY WORKS OVER FIELDS CONTAINED IN R :(
+##            #on the other hand it is more efficient when working over subfields of R, so maybe could implement both
+##            if self.rank() == 0:
 ##                def b(i):
 ##                    vals = [0] * self.rows * self.cols
 ##                    vals[i] = 1
 ##                    return vals
-##                basis = [row_to_mat(self.rows, self.cols, MatrixOver(ring)(1, self.rows * self.cols, [b(i)])) for i in range(self.rows * self.cols)]
+##                basis = [row_to_mat(self.rows, self.cols, Matrix(1, self.rows * self.cols, [b(i)])) for i in range(self.rows * self.cols)]
 ##            else:
-##                metamatrix = MatrixOver(ring).join_rows([mat_to_row(mat) for mat in self.basis])
+##                metamatrix = Matrix.join_rows([mat_to_row(mat) for mat in self.basis])
 ##                basis = [row_to_mat(self.rows, self.cols, b) for b in metamatrix.transpose().row_kernel().basis]
 ##            comp = type(self)(self.rows, self.cols, basis)
-##            assert (self & comp).dimention() == 0
-##            assert (self + comp).dimention() == self.rows * self.cols
+##            assert (self & comp).rank() == 0
+##            assert (self + comp).rank() == self.rows * self.cols
 ##            return comp
 
         def transpose(self):
             return type(self)(self.cols, self.rows, [mat.transpose() for mat in self.basis])
 
-    return Span
+    return LinearSubspace
+
+
+
+
+@functools.cache
+def AffineSubspaceOver(ring):
+    assert issubclass(ring, base.Ring)
+    Matrix = MatrixOver(ring)
+
+    def mat_to_row(mat):
+        return Matrix(1, mat.cols * mat.rows, [[mat[i % mat.rows, i // mat.rows] for i in range(mat.cols * mat.rows)]])
+
+    def row_to_mat(rows, cols, row_mat):
+        assert row_mat.cols == rows * cols
+        assert row_mat.rows == 1
+        return Matrix(rows, cols, [[row_mat[0, r + c * rows] for c in range(cols)] for r in range(rows)])
+    
+    class AffineSubspace():
+        def __init__(self, rows, cols, offset, matricies):
+            assert type(rows) == int and rows >= 0
+            assert type(cols) == int and rows >= 0
+            assert isinstance(offset, Matrix)
+            assert offset.rows == rows
+            assert offset.cols == cols
+            for matrix in matricies:
+                assert isinstance(matrix, Matrix)
+                assert matrix.rows == rows
+                assert matrix.cols == cols
+
+            self.offset = offset
+            self.matricies = matricies
+            
+            self.rows = rows
+            self.cols = cols
+                
+        def __str__(self):
+            if len(self.matricies) == 0:
+                return "{0}"
+            else:
+                rows = [""] * self.rows
+
+                offset_str_rows = str(self.offset).split("\n")
+                for r in range(self.rows):
+                    rows[r] += offset_str_rows[r]
+
+                for r in range(self.rows):
+                    if r == self.rows - 1:
+                        rows[r] += " + "
+                    else:
+                        rows[r] += "   "
+                
+                for idx, mat in enumerate(self.matricies):
+                    if idx != 0:
+                        for r in range(self.rows):
+                            if r == self.rows - 1:
+                                rows[r] += " , "
+                            else:
+                                rows[r] += "   "
+                    mat_str_rows = str(mat).split("\n")
+                    for r in range(self.rows):
+                        rows[r] += mat_str_rows[r]
+                return "\n".join(rows)
+            
+        def __repr__(self):
+            return "AffineSubspace(" + repr(self.offset) + "; ", ", ".join(repr(mat) for mat in self.matricies) + ")"
+
+        def __and__(self, other):
+            raise NotImplementedError()
+
+        def rank(self):
+            return len(self.basis)
+        
+        def sample(self):
+            raise NotImplementedError()
+
+        def transpose(self):
+            raise NotImplementedError()
+
+    return AffineSubspace
+
+
+
+
+
+
 
 
 
