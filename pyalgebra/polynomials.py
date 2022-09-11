@@ -5,6 +5,8 @@ from pyalgebra import complex_poly_view
 import functools
 import itertools
 
+import numpy as np
+
 
 
 
@@ -290,9 +292,10 @@ class Poly():
         return tuple(open_intervals)    
 
     @staticmethod
-    def count_complex_roots(poly, a, b, c, d):
+    def count_complex_roots(poly, a, b, c, d):        
         assert a < b
         assert c < d
+            
         poly = Poly.primitive(Poly.sqfree(poly))
 
         a_vert_re, a_vert_im = Poly.at_fixed_re(poly, a)
@@ -406,8 +409,50 @@ class Poly():
     #yield islating boxes for the n roots contained in the box (a, b, c, d)
     @staticmethod
     def isolate_complex_roots_boxed(poly, n, a, b, c, d):
-        #print(n, a, b, c, d)
-
+######        print("isolate", poly, n, a, b, c, d)
+######
+######        def is_overlap(b1, b2):
+######            return not ((b1[1] < b2[0] or b2[1] < b1[0]) and (b1[3] < b2[2] or b2[3] < b1[2]))
+######
+######        #try a floating point method. If that fails, use an exact method
+######        big = 10 ** 10
+######        eps = Frac(10, big)
+######        h_boxes = []
+######        for root in np.roots(tuple(reversed(poly))):
+######            x, y = Frac(root.real), Frac(root.imag)
+########            x = x.limit_denominator(big)
+########            y = y.limit_denominator(big)
+######            box = [x - eps, x + eps, y - eps, y + eps]
+######            if is_overlap(box, (a, b, c, d)):
+######                h_boxes.append([x - eps, x + eps, y - eps, y + eps])
+######
+######        is_valid = True
+######
+######        print(n, len(h_boxes), len(poly))
+######        
+######        if len(h_boxes) != n:
+######            is_valid = False
+######
+######        if is_valid:
+######            for i in range(len(h_boxes)):
+######                for j in range(i + 1, len(h_boxes)):
+######                    if is_overlap(h_boxes[i], h_boxes[j]):
+######                        is_valid = False
+######
+######            if is_valid:
+######                for a, b, c, d in h_boxes:
+######                    if Poly.count_complex_roots(poly, a, b, c, d) != 1:
+######                        is_valid = False
+######
+######                if is_valid:
+######                    yield from h_boxes
+######                    return
+######
+######        print("nope")
+######                
+            
+        
+        
         def gen_subs(a, b, c, d):
             ab = Frac(a + b, 2)
             cd = Frac(c + d, 2)
