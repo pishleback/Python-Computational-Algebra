@@ -1,5 +1,5 @@
 # computational-algebra
-A collection of algorithms in computational algebra
+A collection of algorithms in computational algebra. I've stopped working on this in favour of [Algebraeon](https://github.com/pishleback/Algebraeon).
 
 # Algorithms
 ## Root Isolation
